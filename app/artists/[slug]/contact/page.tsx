@@ -16,7 +16,11 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/co
   const { slug } = await params;
   const artist = getArtistBySlug(slug);
   if (!artist) return {};
-  return { title: `Contact | ${artist.name}`, description: `Contact information for ${artist.name}.` };
+  return {
+    title: `Contact | ${artist.name}`,
+    description: `Contact information for ${artist.name}.`,
+    alternates: { canonical: `/artists/${artist.slug}/contact` },
+  };
 }
 
 function ContactCard({ channel }: { channel: ContactChannel }) {

@@ -12,7 +12,11 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/bo
   const { slug } = await params;
   const artist = getArtistBySlug(slug);
   if (!artist) return {};
-  return { title: `Book ${artist.name}`, description: `Submit a booking enquiry for ${artist.name}.` };
+  return {
+    title: `Book ${artist.name}`,
+    description: `Submit a booking enquiry for ${artist.name}.`,
+    alternates: { canonical: `/artists/${artist.slug}/booking` },
+  };
 }
 
 export default async function BookingPage({ params }: PageProps<"/artists/[slug]/booking">) {

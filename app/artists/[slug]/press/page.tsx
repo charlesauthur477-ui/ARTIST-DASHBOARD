@@ -17,7 +17,11 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/pr
   const { slug } = await params;
   const artist = getArtistBySlug(slug);
   if (!artist) return {};
-  return { title: `Press Kit | ${artist.name}`, description: artist.pressKit.shortBio };
+  return {
+    title: `Press Kit | ${artist.name}`,
+    description: artist.pressKit.shortBio,
+    alternates: { canonical: `/artists/${artist.slug}/press` },
+  };
 }
 
 export default async function PressPage({ params }: PageProps<"/artists/[slug]/press">) {

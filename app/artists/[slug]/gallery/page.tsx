@@ -12,7 +12,11 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/ga
   const { slug } = await params;
   const artist = getArtistBySlug(slug);
   if (!artist) return {};
-  return { title: `Gallery | ${artist.name}`, description: `Live, editorial, and behind-the-scenes photography of ${artist.name}.` };
+  return {
+    title: `Gallery | ${artist.name}`,
+    description: `Live, editorial, and behind-the-scenes photography of ${artist.name}.`,
+    alternates: { canonical: `/artists/${artist.slug}/gallery` },
+  };
 }
 
 export default async function GalleryPage({ params }: PageProps<"/artists/[slug]/gallery">) {

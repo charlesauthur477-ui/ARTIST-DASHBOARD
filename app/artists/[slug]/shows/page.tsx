@@ -15,7 +15,11 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/sh
   const { slug } = await params;
   const artist = getArtistBySlug(slug);
   if (!artist) return {};
-  return { title: `Shows | ${artist.name}`, description: `Upcoming and past shows from ${artist.name}.` };
+  return {
+    title: `Shows | ${artist.name}`,
+    description: `Upcoming and past shows from ${artist.name}.`,
+    alternates: { canonical: `/artists/${artist.slug}/shows` },
+  };
 }
 
 export default async function ShowsPage({ params }: PageProps<"/artists/[slug]/shows">) {
@@ -26,8 +30,29 @@ export default async function ShowsPage({ params }: PageProps<"/artists/[slug]/s
   const upcoming = getArtistShows(slug, { upcomingOnly: true });
   const past = getArtistShows(slug, { pastOnly: true });
 
+  const jsonLd = upcoming.map((show) => ({
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: `${artist.name} — ${show.eventType}`,
+    startDate: show.date,
+    eventStatus:
+      show.status === "sold-out"
+        ? "https://schema.org/EventScheduled"
+        : "https://schema.org/EventScheduled",
+    location: {
+      "@type": "Place",
+      name: show.venue,
+      address: show.city,
+    },
+    performer: { "@type": "MusicGroup", name: artist.name },
+    ...(show.ticketUrl ? { offers: { "@type": "Offer", url: show.ticketUrl } } : {}),
+  }));
+
   return (
     <>
+      {jsonLd.length > 0 ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      ) : null}
       <PageHero eyebrow="Live Dates" title="Shows" description={`Where to catch ${artist.name} live.`} />
 
       <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">

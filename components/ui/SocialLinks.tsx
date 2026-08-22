@@ -69,7 +69,7 @@ export function SocialLinks({ links, className, iconClassName }: SocialLinksProp
               target="_blank"
               rel="noopener noreferrer"
               aria-label={LABELS[platform]}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle text-foreground/80 transition hover:border-bronze-400/60 hover:text-bronze-300 focus-visible:border-bronze-400/60"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border-subtle text-foreground/80 transition hover:border-bronze-400/60 hover:text-bronze-300 focus-visible:border-bronze-400/60"
             >
               <Icon className={cn("h-4 w-4", iconClassName)} />
             </a>

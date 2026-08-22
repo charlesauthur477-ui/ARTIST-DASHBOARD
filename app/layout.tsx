@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { MotionProvider } from "@/components/providers/MotionProvider";
 
 // NOTE on fonts: this project targets next/font/google (Playfair Display +
 // Inter) for the premium editorial look described in the brief. Some build
@@ -20,10 +21,18 @@ export const metadata: Metadata = {
     "Premium multi-artist website platform — official artist websites, digital press kits, and booking for professionally managed touring musicians.",
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0b0a09",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <MotionProvider>{children}</MotionProvider>
+      </body>
     </html>
   );
 }

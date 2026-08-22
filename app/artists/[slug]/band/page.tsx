@@ -17,7 +17,11 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/ba
   const { slug } = await params;
   const artist = getArtistBySlug(slug);
   if (!artist) return {};
-  return { title: `The Band | ${artist.name}`, description: `Meet the musicians who perform live with ${artist.name}.` };
+  return {
+    title: `The Band | ${artist.name}`,
+    description: `Meet the musicians who perform live with ${artist.name}.`,
+    alternates: { canonical: `/artists/${artist.slug}/band` },
+  };
 }
 
 export default async function BandPage({ params }: PageProps<"/artists/[slug]/band">) {

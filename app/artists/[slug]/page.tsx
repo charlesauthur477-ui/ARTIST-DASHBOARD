@@ -15,6 +15,7 @@ import { ShowsList } from "@/components/shows/ShowsList";
 import { BandMemberCard } from "@/components/band/BandMemberCard";
 import { CollaborationGrid } from "@/components/home/CollaborationGrid";
 import { TestimonialCard } from "@/components/home/TestimonialCard";
+import { InstagramFeed } from "@/components/home/InstagramFeed";
 import { bookingHref } from "@/lib/nav";
 
 export function generateStaticParams() {
@@ -211,6 +212,17 @@ export default async function ArtistHomePage({ params }: PageProps<"/artists/[sl
               ))}
             </Reveal>
           </div>
+        </section>
+      ) : null}
+
+      {artist.instagramFeed.length > 0 ? (
+        <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
+          <Reveal>
+            <SectionHeading eyebrow="Social" title="Latest from Instagram" align="center" className="mx-auto" />
+          </Reveal>
+          <Reveal delay={0.1} className="mt-10">
+            <InstagramFeed posts={artist.instagramFeed} handle={artist.instagramHandle} />
+          </Reveal>
         </section>
       ) : null}
 

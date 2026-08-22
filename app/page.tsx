@@ -9,13 +9,23 @@ import { Reveal } from "@/components/ui/Reveal";
 export const metadata: Metadata = {
   title: "Our Artists",
   description: platform.description,
+  alternates: { canonical: "/" },
 };
 
 export default function PlatformHomePage() {
   const artists = getAllArtists();
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: platform.name,
+    description: platform.description,
+    email: platform.contactEmail,
+  };
+
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6 sm:px-6">
         <span className="font-display text-lg tracking-wide">{platform.name}</span>
         <a href={`mailto:${platform.contactEmail}`} className="text-sm text-foreground/75 hover:text-bronze-300">
