@@ -9,13 +9,13 @@ import { Button } from "@/components/ui/Button";
 import { CTASection } from "@/components/ui/CTASection";
 import { bookingHref } from "@/lib/nav";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]/press">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: `Press Kit | ${artist.name}`,
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/pr
 
 export default async function PressPage({ params }: PageProps<"/artists/[slug]/press">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
   const { pressKit } = artist;

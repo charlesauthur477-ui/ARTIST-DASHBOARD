@@ -1,65 +1,60 @@
 "use server";
 
-import type { ApplicationFieldErrors, ApplicationSubmissionResult, ArtistApplication } from "@/types/application";
+import type { ApplicationSubmissionResult, ArtistApplication } from "@/types/application";
+import { validateArtistApplication } from "@/lib/validation/application";
+import { createDraftApplication as createDraftApplicationRow, persistApplicationSubmission } from "@/lib/repositories/applications";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validate(data: ArtistApplication): ApplicationFieldErrors {
-  const errors: ApplicationFieldErrors = {};
-
-  if (!data.stageName || data.stageName.trim().length < 2) {
-    errors.stageName = "Please enter an artist / stage name.";
-  }
-  if (!data.profilePhoto) {
-    errors.profilePhoto = "A profile photo is required.";
-  }
-  if (!data.heroPhoto) {
-    errors.heroPhoto = "A hero / cover photo is required.";
-  }
-  if (!data.preferredContactEmail || !EMAIL_RE.test(data.preferredContactEmail)) {
-    errors.preferredContactEmail = "Please enter a valid contact email.";
-  }
-  if (!data.consentContentUse) {
-    errors.consentContentUse = "Please confirm this to submit your profile.";
-  }
-  if (!data.consentMediaRights) {
-    errors.consentMediaRights = "Please confirm this to submit your profile.";
-  }
-
-  return errors;
+/**
+ * createDraftApplication — called once when the onboarding wizard mounts
+ * (see ApplicationWizard.tsx), before the applicant can upload any photo.
+ * Every uploaded file needs a real application_id to attach to (see
+ * PHASE_3_PLAN.md Section 6) — this is where that id comes from. The row
+ * this creates starts life with status='draft' and mostly-empty fields;
+ * submitArtistApplication below fills it in and flips it to 'submitted'.
+ */
+export async function createDraftApplication(): Promise<string> {
+  return createDraftApplicationRow();
 }
 
 /**
  * submitArtistApplication — the single entry point the onboarding wizard
  * calls on final submit.
  *
- * IMPORTANT — persistence status (V1): there is no database or CMS
- * connected yet. This function re-validates the submission server-side
- * (never trust client-only validation) and logs a structured summary to the
- * server console — visible in Vercel's function logs — so nothing submitted
- * is silently dropped. It does NOT durably store the submission or any
- * uploaded media anywhere. A returned `success: true` means "we received
- * and logged this," not "this is saved in a database."
+ * Phase 3: this is now a real, persistent write. Re-validates the
+ * submission server-side with the same Zod schema used to type the data
+ * (lib/validation/application.ts) — never trust client-only validation —
+ * and, once valid, updates the existing draft application row (created by
+ * createDraftApplication above) with the full submitted content, replaces
+ * its child collections (releases, shows, band members, etc.), and marks
+ * status='submitted'. A returned `success: true` means the application and
+ * every photo attached to it are durably stored in the database and Vercel
+ * Blob — nothing here is a simulation.
  *
- * When a real datastore exists, replace the body below (from the comment
- * marker down) with a write to it — e.g.
- *   await db.artistApplications.create({ data })
- * or
- *   await fetch(process.env.APPLICATIONS_WEBHOOK_URL, { method: "POST", body: JSON.stringify(data) })
- * No caller/UI code needs to change; this function's signature is the seam.
+ * `applicationId` is the id returned by createDraftApplication (persisted
+ * client-side alongside the wizard's draft state) — every photo the
+ * applicant already uploaded during the wizard is already attached to this
+ * same row, so no re-upload happens here.
  */
 export async function submitArtistApplication(
+  applicationId: string,
   data: ArtistApplication
 ): Promise<ApplicationSubmissionResult> {
-  const errors = validate(data);
-  if (Object.keys(errors).length > 0) {
-    return { success: false, message: "Please correct the highlighted fields.", errors };
+  const result = validateArtistApplication(data);
+  if (!result.success || !result.data) {
+    return { success: false, message: "Please correct the highlighted fields.", errors: result.errors };
   }
 
-  const referenceId = `APP-${Date.now().toString(36).toUpperCase()}`;
+  try {
+    await persistApplicationSubmission(applicationId, result.data);
+  } catch (err) {
+    console.error(`[artist-application] failed to persist submission for ${applicationId}`, err);
+    return {
+      success: false,
+      message: "We couldn't save your submission just now. Please try again in a moment.",
+    };
+  }
 
-  // --- NOT PERSISTENT — see function doc comment above ---------------------
-  console.log(`[artist-application] ${referenceId} received`, {
+  console.log(`[artist-application] ${applicationId} submitted`, {
     stageName: data.stageName,
     contactEmail: data.preferredContactEmail,
     releases: data.releases.length,
@@ -71,14 +66,11 @@ export async function submitArtistApplication(
     hasHeroPhoto: Boolean(data.heroPhoto),
     additionalPhotos: data.additionalPhotos.length,
   });
-  // ---------------------------------------------------------------------
-
-  await new Promise((resolve) => setTimeout(resolve, 700));
 
   return {
     success: true,
     message:
       "Thank you — we've received your submission. Our team will review your profile and follow up by email before your artist website goes live.",
-    referenceId,
+    referenceId: applicationId,
   };
 }

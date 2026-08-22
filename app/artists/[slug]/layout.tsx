@@ -6,7 +6,7 @@ import { MobileBookingBar } from "@/components/layout/MobileBookingBar";
 
 export default async function ArtistLayout({ children, params }: LayoutProps<"/artists/[slug]">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
 
   if (!artist) notFound();
 

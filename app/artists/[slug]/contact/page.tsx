@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/Button";
 import { bookingHref } from "@/lib/nav";
 import type { ContactChannel } from "@/types/artist";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]/contact">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: `Contact | ${artist.name}`,
@@ -48,7 +48,7 @@ function ContactCard({ channel }: { channel: ContactChannel }) {
 
 export default async function ContactPage({ params }: PageProps<"/artists/[slug]/contact">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
   const { contactInformation } = artist;

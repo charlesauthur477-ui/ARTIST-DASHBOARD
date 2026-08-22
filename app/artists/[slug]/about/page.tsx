@@ -7,13 +7,13 @@ import { CTASection } from "@/components/ui/CTASection";
 import { Button } from "@/components/ui/Button";
 import { bookingHref } from "@/lib/nav";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]/about">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: `About | ${artist.name}`,
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/ab
 
 export default async function AboutPage({ params }: PageProps<"/artists/[slug]/about">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
   return (

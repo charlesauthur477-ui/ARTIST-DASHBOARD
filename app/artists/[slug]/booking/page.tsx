@@ -4,13 +4,13 @@ import { getAllArtistSlugs, getArtistBySlug } from "@/lib/artists";
 import { PageHero } from "@/components/ui/PageHero";
 import { BookingForm } from "@/components/booking/BookingForm";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]/booking">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: `Book ${artist.name}`,
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/bo
 
 export default async function BookingPage({ params }: PageProps<"/artists/[slug]/booking">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
   return (

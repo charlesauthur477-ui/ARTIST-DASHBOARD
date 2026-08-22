@@ -20,10 +20,15 @@ import type { PerformanceFormatId, SocialLinks } from "./artist";
 // ---------------------------------------------------------------------------
 
 /**
- * A file the artist has selected in their browser. `previewUrl` is a
- * browser-local object URL (see lib/uploads.ts) — it is NOT a permanent,
- * publicly reachable file. Nothing in this codebase should treat a
- * StagedAsset as if it were already uploaded to real storage.
+ * A photo the artist has attached to their application.
+ *
+ * Phase 3: once uploaded, `previewUrl` is the file's real, permanent Vercel
+ * Blob URL and `mediaId` is set to the corresponding `media` table row's id
+ * (see lib/media.ts / lib/repositories/media.ts) — this is a genuinely
+ * stored file, not a browser-only preview. `mediaId` is undefined only
+ * during the brief window between file selection and the upload Server
+ * Action resolving (see lib/uploads.ts#uploadStagedAsset), or if an upload
+ * failed.
  */
 export interface StagedAsset {
   id: string;
@@ -31,6 +36,7 @@ export interface StagedAsset {
   fileSizeBytes: number;
   mimeType: string;
   previewUrl: string;
+  mediaId?: string;
 }
 
 export const ARTIST_TYPES = ["solo", "band", "duo", "dj", "singer", "instrumentalist", "other"] as const;

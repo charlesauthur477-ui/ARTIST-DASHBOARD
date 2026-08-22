@@ -8,7 +8,7 @@ import { CheckboxField } from "@/components/application/fields/CheckboxField";
 import { AddButton, RepeatableCard } from "@/components/application/RepeatableList";
 import type { StepComponentProps } from "./types";
 
-export function BandStep({ data, update }: StepComponentProps) {
+export function BandStep({ data, update, applicationId }: StepComponentProps) {
   function updateMember(id: string, patch: Partial<ApplicationBandMember>) {
     update(
       "bandMembers",
@@ -38,7 +38,13 @@ export function BandStep({ data, update }: StepComponentProps) {
               </div>
               <TextInput label="Instagram" type="url" value={member.instagram} onChange={(v) => updateMember(member.id, { instagram: v })} />
               <div className="sm:col-span-2">
-                <FileInput label="Photo" asset={member.photo} onChange={(a) => updateMember(member.id, { photo: a })} />
+                <FileInput
+                  label="Photo"
+                  asset={member.photo}
+                  onChange={(a) => updateMember(member.id, { photo: a })}
+                  applicationId={applicationId}
+                  role="band_member_photo"
+                />
               </div>
             </RepeatableCard>
           ))}

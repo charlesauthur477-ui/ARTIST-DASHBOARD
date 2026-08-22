@@ -18,13 +18,13 @@ import { TestimonialCard } from "@/components/home/TestimonialCard";
 import { InstagramFeed } from "@/components/home/InstagramFeed";
 import { bookingHref } from "@/lib/nav";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: artist.name,
@@ -47,14 +47,19 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]">)
 
 export default async function ArtistHomePage({ params }: PageProps<"/artists/[slug]">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
-  const latestRelease = getArtistLatestRelease(slug);
+  const [latestRelease, upcomingShowsAll, galleryAll, bandAll] = await Promise.all([
+    getArtistLatestRelease(slug),
+    getArtistShows(slug, { upcomingOnly: true }),
+    getArtistGallery(slug),
+    getArtistBand(slug),
+  ]);
   const featuredVideo = artist.videos.find((v) => v.featured) ?? artist.videos[0];
-  const upcomingShows = getArtistShows(slug, { upcomingOnly: true }).slice(0, 3);
-  const galleryPreview = getArtistGallery(slug).slice(0, 6);
-  const bandPreview = getArtistBand(slug).slice(0, 4);
+  const upcomingShows = upcomingShowsAll.slice(0, 3);
+  const galleryPreview = galleryAll.slice(0, 6);
+  const bandPreview = bandAll.slice(0, 4);
 
   const jsonLd = {
     "@context": "https://schema.org",

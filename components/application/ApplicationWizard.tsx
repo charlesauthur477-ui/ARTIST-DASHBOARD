@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ArtistApplication } from "@/types/application";
 import { createEmptyApplication } from "@/lib/applicationDefaults";
-import { submitArtistApplication } from "@/lib/application";
+import { createDraftApplication, submitArtistApplication } from "@/lib/application";
 import { cn } from "@/lib/cn";
 
 import { BasicInfoStep } from "./steps/BasicInfoStep";
@@ -77,40 +77,72 @@ export function ApplicationWizard() {
   const [referenceId, setReferenceId] = useState<string | undefined>();
   const [draftBanner, setDraftBanner] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
+  // The database row (status: draft) every uploaded photo in this session
+  // attaches to — see PHASE_3_PLAN.md Section 6. Created once on mount
+  // (or restored from a saved draft) so it exists before the applicant
+  // reaches the Photos step. Uploads are disabled (FileInput shows a retry
+  // message) for the brief window before this resolves.
+  const [applicationId, setApplicationId] = useState<string | null>(null);
 
-  // Offer to resume a saved draft. Draft data never leaves the browser and
-  // is cleared automatically on successful submission — this is a
-  // convenience for a long mobile form, not a substitute for real storage.
+  // Restore a saved draft's data + application id, or create a fresh
+  // application row. Draft *data* never leaves the browser until submit;
+  // the application *id* (and any photos already uploaded against it) does
+  // live in the database from the moment this effect creates it — that's
+  // what lets uploads be real, permanent files even before final submit.
   useEffect(() => {
-    // setState is deferred into a timeout callback (rather than called
-    // directly in the effect body) so this is a response to an async check
-    // of an external system (localStorage), not a synchronous cascading
-    // render — see react-hooks/set-state-in-effect.
-    const id = setTimeout(() => {
+    let cancelled = false;
+    // The state updates below happen inside an async callback responding to
+    // reads of external systems (localStorage, then the createDraftApplication
+    // Server Action) rather than synchronously in the effect body itself —
+    // see react-hooks/set-state-in-effect.
+    (async () => {
+      let existingId: string | null = null;
       try {
         const raw = window.localStorage.getItem(DRAFT_KEY);
-        if (raw) setDraftBanner(true);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { applicationId?: string; data?: ArtistApplication };
+          if (parsed?.applicationId) {
+            existingId = parsed.applicationId;
+            if (!cancelled) setDraftBanner(true);
+          }
+        }
       } catch {
-        // localStorage unavailable (private browsing, etc.) — silently skip.
+        // localStorage unavailable or corrupt — proceed as a fresh session.
       }
-      setHasHydrated(true);
-    }, 0);
-    return () => clearTimeout(id);
+
+      if (existingId) {
+        if (!cancelled) setApplicationId(existingId);
+      } else {
+        try {
+          const newId = await createDraftApplication();
+          if (!cancelled) setApplicationId(newId);
+        } catch (err) {
+          console.error("[application] failed to create draft application", err);
+        }
+      }
+      if (!cancelled) setHasHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!hasHydrated || status === "success") return;
+    if (!hasHydrated || status === "success" || !applicationId) return;
     try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ applicationId, data }));
     } catch {
       // Ignore quota/availability errors — draft saving is best-effort.
     }
-  }, [data, hasHydrated, status]);
+  }, [data, hasHydrated, status, applicationId]);
 
   function resumeDraft() {
     try {
       const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (raw) setData(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw) as { applicationId?: string; data?: ArtistApplication };
+        if (parsed?.data) setData(parsed.data);
+      }
     } catch {
       // Ignore corrupt draft — user just starts fresh.
     }
@@ -124,6 +156,13 @@ export function ApplicationWizard() {
       // no-op
     }
     setDraftBanner(false);
+    // The discarded draft's application row (and any photos already
+    // uploaded against it) is left as-is in the database — starting over
+    // gets a brand-new draft row rather than reusing one the applicant
+    // explicitly walked away from.
+    createDraftApplication()
+      .then((id) => setApplicationId(id))
+      .catch((err) => console.error("[application] failed to create draft application", err));
   }
 
   function update<K extends keyof ArtistApplication>(key: K, value: ArtistApplication[K]) {
@@ -153,13 +192,22 @@ export function ApplicationWizard() {
   }
 
   async function handleSubmit() {
+    if (!applicationId) {
+      setStatus("error");
+      setStatusMessage("Your application isn't ready yet — please wait a moment and try again.");
+      return;
+    }
     setStatus("submitting");
-    const result = await submitArtistApplication(data);
+    const result = await submitArtistApplication(applicationId, data);
     if (result.success) {
       setStatus("success");
       setStatusMessage(result.message);
       setReferenceId(result.referenceId);
-      discardDraft();
+      try {
+        window.localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // no-op
+      }
     } else {
       setStatus("error");
       setStatusMessage(result.message);
@@ -209,6 +257,7 @@ export function ApplicationWizard() {
           data={data}
           update={update}
           errors={errors}
+          applicationId={applicationId}
           onEditStep={goToStep}
           onSubmit={handleSubmit}
           status={status}
@@ -216,7 +265,7 @@ export function ApplicationWizard() {
           referenceId={referenceId}
         />
       ) : (
-        <Component data={data} update={update} errors={errors} />
+        <Component data={data} update={update} errors={errors} applicationId={applicationId} />
       )}
 
       {status !== "success" && !isReview ? (

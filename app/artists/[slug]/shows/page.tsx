@@ -7,13 +7,13 @@ import { CTASection } from "@/components/ui/CTASection";
 import { Button } from "@/components/ui/Button";
 import { bookingHref } from "@/lib/nav";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]/shows">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: `Shows | ${artist.name}`,
@@ -24,11 +24,13 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/sh
 
 export default async function ShowsPage({ params }: PageProps<"/artists/[slug]/shows">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
-  const upcoming = getArtistShows(slug, { upcomingOnly: true });
-  const past = getArtistShows(slug, { pastOnly: true });
+  const [upcoming, past] = await Promise.all([
+    getArtistShows(slug, { upcomingOnly: true }),
+    getArtistShows(slug, { pastOnly: true }),
+  ]);
 
   const jsonLd = upcoming.map((show) => ({
     "@context": "https://schema.org",

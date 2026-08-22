@@ -41,22 +41,32 @@ straight to `/artists/aurora-noir`.
 ### Other commands
 
 ```bash
-npm run build   # production build
-npm run start   # run the production build locally
-npm run lint    # ESLint
-npx tsc --noEmit # TypeScript check
+npm run build      # production build
+npm run start      # run the production build locally
+npm run lint       # ESLint
+npx tsc --noEmit   # TypeScript check
+npm run db:generate # generate a SQL migration from db/schema.ts (no DB connection needed)
+npm run db:migrate  # apply pending migrations — requires DATABASE_URL
+npm run db:seed     # seed Aurora Noir + Nova Vale into the database — requires DATABASE_URL + BLOB_READ_WRITE_TOKEN
 ```
 
 `npm run build` produces a fully static export of every artist route
 (`generateStaticParams` prerenders each artist × each sub-page at build
-time), so hosting is simple and fast.
+time) whenever `USE_DATABASE` is off — see `PHASE_3_REPORT.md` for what
+changes once it's on.
 
 ## Deploying to Vercel
 
 1. Push this repository to GitHub/GitLab/Bitbucket.
 2. Import the repo in Vercel — it auto-detects Next.js, no configuration needed.
-3. No environment variables are required for V1 (see `.env.example`).
-4. Deploy. Every artist route is statically prerendered, so first paint is fast globally.
+3. With no environment variables set, the site runs exactly as it did pre-Phase-3
+   (static demo data, no database). To enable the database: add the Neon
+   Postgres and Vercel Blob integrations from the project's Storage tab —
+   this auto-populates `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` — then run
+   `npm run db:migrate` and `npm run db:seed` locally (pointed at that same
+   `DATABASE_URL`) before setting `USE_DATABASE=true` in Production. See
+   `PHASE_3_REPORT.md` for the full walkthrough and current status.
+4. Deploy.
 
 Or from the CLI: `npx vercel`.
 
@@ -81,19 +91,36 @@ components/
   home/      VideoSection, CollaborationGrid, TestimonialCard, InstagramFeed
   ui/        Button, CTASection, SectionHeading, PageHero, SocialLinks, Reveal, BrandIcons
 data/
-  artists/   One file per artist (aurora-noir.ts, nova-vale.ts) + index.ts registry
+  artists/   One file per artist (aurora-noir.ts, nova-vale.ts) + index.ts registry — static fallback (see USE_DATABASE)
   platform.ts  Management company copy for the landing page
 types/
-  artist.ts   The Artist data model (single source of truth)
-  booking.ts  Booking form input/validation types
+  artist.ts       The Artist data model (single source of truth)
+  application.ts  The ArtistApplication data model (/apply)
+  booking.ts      Booking form input/validation types
 lib/
-  artists.ts  Data access layer (getArtistBySlug, getArtistShows, etc.)
-  booking.ts  submitBookingInquiry() — server action, validates + simulates submission
-  nav.ts, format.ts, cn.ts
-public/artists/<slug>/  Per-artist image assets (gallery, music, band, press)
+  artists.ts       Data access layer — static data or database, gated by USE_DATABASE
+  application.ts   createDraftApplication() / submitArtistApplication() — server actions
+  applications.ts  Admin-facing application read service (server actions, not yet used by any UI)
+  approvals.ts     approveApplication() / rejectApplication() — server actions (not yet used by any UI)
+  media.ts         uploadMedia() / deleteMedia() — Vercel Blob + media table (server actions)
+  db.ts            Drizzle client (Neon HTTP driver)
+  slug.ts          Slug validation for the approval flow
+  booking.ts       submitBookingInquiry() — server action, validates + simulates submission
+  validation/application.ts  Zod schema for ArtistApplication (server-side re-validation)
+  repositories/    applications.ts, artists.ts, media.ts, approvals.ts — raw DB access, imported only by the files above
+  uploads.ts, nav.ts, format.ts, cn.ts
+db/
+  schema.ts     Drizzle table definitions — source of truth for the database schema
+  migrations/   Generated SQL migrations (npm run db:generate)
+public/artists/<slug>/  Per-artist image assets (gallery, music, band, press) — seeded into Blob by db:seed
 scripts/
   gen_placeholders.py       Regenerates the procedural demo photography
   gen_press_kit_pdfs.py     Regenerates the demo EPK PDFs
+  migrate.ts                Applies pending migrations (npm run db:migrate)
+  seed_demo_artists.ts      Seeds Aurora Noir + Nova Vale into the database (npm run db:seed)
+drizzle.config.ts  drizzle-kit configuration
+PHASE_3_PLAN.md    Approved Phase 3 architecture (database + media storage)
+PHASE_3_REPORT.md  What was actually built, tested, and left incomplete
 ```
 
 ## The data model — one app, many artists
@@ -177,27 +204,27 @@ reuses the same sub-types as the public `Artist` model (`SocialLinks`,
 artist data file later; see `data/artists/aurora-noir.ts` for the shape it
 should become.
 
-**Submission** (`lib/application.ts`) — `submitArtistApplication()` is a
-Server Action that re-validates everything server-side and logs a
-structured summary to the server console (visible in Vercel's function
-logs), returning a reference ID. **There is no database connected yet** —
-a successful response means "received and logged," not "permanently
-stored." Replace the body of this one function with a real datastore write
-when one exists; no other code needs to change.
+**Submission** (`lib/application.ts`) — as of Phase 3, `submitArtistApplication()`
+is a real, persistent write: it re-validates everything server-side against
+a Zod schema (`lib/validation/application.ts`), then saves the submission to
+the `artist_applications` table (plus its child tables) in Postgres via
+`lib/repositories/applications.ts`, and marks the row `status: "submitted"`.
+See `PHASE_3_REPORT.md` for the full database design and the approval flow
+that turns a submitted application into a public artist.
 
-**File uploads** (`lib/uploads.ts`) — photos are staged as local
-browser-object-URL previews only (`stageLocalFile()`); nothing is uploaded
-to any server or storage bucket in V1. Every photo field in the wizard
-visibly labels itself "Attached — not yet uploaded to storage" so nobody
-mistakes a preview for a real upload. `stageLocalFile()` is the single
-function to replace when a provider (Vercel Blob, Cloudinary, S3, Supabase
-Storage, etc.) is connected — the wizard and its field components don't
-change.
+**File uploads** (`lib/uploads.ts`) — as of Phase 3, photos are uploaded for
+real the moment they're selected, via the `uploadMedia` Server Action
+(`lib/media.ts`) to Vercel Blob, with a `media` row recorded in Postgres for
+each one. Every photo field shows a green "Uploaded" state once that
+completes — there is no more "Attached — not yet uploaded to storage"
+placeholder.
 
-**Draft autosave** — in-progress answers are mirrored to `localStorage` on
-this device only (cleared automatically on successful submission) so a long
-form isn't lost if an artist's browser closes mid-way. This is a UX
-convenience, not a substitute for the submission itself.
+**Draft autosave** — in-progress form answers are still mirrored to
+`localStorage` on this device only (a UX convenience for a long form, not a
+substitute for the real submission), but as of Phase 3 the *application
+record itself* (with an id every uploaded photo is attached to) is created
+in the database the moment the wizard is opened — see `PHASE_3_REPORT.md`
+Section 5.
 
 ## Instagram — V1 vs. future
 
@@ -261,34 +288,46 @@ directly. No external icon CDN is used anywhere.
   form) is an isolated Client Component; every page and layout is a Server
   Component by default.
 
-## V1 limitations
+## Database + media storage (Phase 3)
 
-- Data is static TypeScript, not a database — content changes require a
-  code change + redeploy.
+As of Phase 3, `artist_applications` and their media are persisted for real
+in Neon Postgres and Vercel Blob, and the public site can optionally read
+`artists` from the same database instead of the static files in
+`data/artists/*.ts`. See **`PHASE_3_PLAN.md`** (the approved architecture)
+and **`PHASE_3_REPORT.md`** (what was actually built, tested, and left
+incomplete) for the full picture — schema, approval flow, media upload
+flow, security model, and the `USE_DATABASE` migration flag. The static
+demo data is still present and is what the site falls back to whenever the
+database isn't configured.
+
+## V1/V2 limitations (pre-admin)
+
 - Booking submissions are simulated (validated + a fake success state);
   nothing is emailed or persisted yet.
 - Instagram feed is static demo data, not a live connection.
-- No authentication, admin dashboard, or CMS — artists/managers cannot
-  self-serve edits yet.
+- No authentication, admin dashboard, or CMS yet — applications can be
+  submitted and stored, and the approval service (application → artist) is
+  implemented and independently callable, but there is no UI for a manager
+  to actually review/approve/reject one. See `PHASE_3_REPORT.md` → "What
+  remains intentionally incomplete."
 - No availability/calendar system behind the booking form yet.
 
-## Future architecture — V2+
+## Future architecture — V4+
 
 Roadmap, in order:
 
-- **V2 — Artist/Manager CMS**: authenticated dashboard to edit everything
-  currently in `data/artists/*.ts` (profile, releases, shows, band, gallery,
-  press, social links) without a code deploy.
-- **V3 — Booking CRM**: `submitBookingInquiry()` starts writing to a real
-  backend; leads flow into a manager-facing pipeline.
-- **V4 — AI booking receptionist**: automated first-response triage for
+- **V4 — Admin / Management Dashboard**: authenticated `/admin` for
+  reviewing and approving applications, editing artists, managing photos,
+  music, shows, band members, and press kits, and publishing/unpublishing —
+  built directly on top of the Phase 3 database and services
+  (`lib/applications.ts`, `lib/approvals.ts`, `lib/repositories/*`).
+- **V5 — Booking CRM**: `submitBookingInquiry()` starts writing to the
+  database; leads flow into a manager-facing pipeline; availability/calendar
+  system feeds the booking form and show status.
+- **V6 — AI booking receptionist**: automated first-response triage for
   inbound enquiries/calls.
-- **V5 — Availability + calendar**: real available/tentative/booked dates
-  feeding the booking form and show status.
-- **V6 — Official Instagram integration**: Meta/Instagram OAuth, server-side
+- **V7 — Official Instagram integration**: Meta/Instagram OAuth, server-side
   token storage, sync worker — see [Instagram](#instagram--v1-vs-future).
-- **V7 — Full multi-artist management platform**: the public sites built
-  here become the front door to the complete system.
 
 None of these require rewriting the public website — that is the point of
 keeping data, data-access, and UI strictly separated from day one.

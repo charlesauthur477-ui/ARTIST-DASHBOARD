@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-export default function PlatformHomePage() {
-  const artists = getAllArtists();
+export default async function PlatformHomePage() {
+  const artists = await getAllArtists();
 
   const jsonLd = {
     "@context": "https://schema.org",

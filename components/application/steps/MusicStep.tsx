@@ -15,7 +15,7 @@ const RELEASE_TYPE_LABELS: Record<(typeof RELEASE_TYPES)[number], string> = {
   single: "Single",
 };
 
-export function MusicStep({ data, update }: StepComponentProps) {
+export function MusicStep({ data, update, applicationId }: StepComponentProps) {
   function updateRelease(id: string, patch: Partial<ApplicationRelease>) {
     update(
       "releases",
@@ -48,6 +48,8 @@ export function MusicStep({ data, update }: StepComponentProps) {
               label="Cover Artwork"
               asset={release.artwork}
               onChange={(a) => updateRelease(release.id, { artwork: a })}
+              applicationId={applicationId}
+              role="release_artwork"
             />
           </div>
           <div className="sm:col-span-2">

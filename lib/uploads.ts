@@ -1,24 +1,20 @@
 import type { StagedAsset } from "@/types/application";
+import type { MediaRole } from "@/lib/repositories/media";
 
 // ---------------------------------------------------------------------------
-// Media upload abstraction — V1 stub.
+// Media upload — client-side helper.
 //
-// There is no media storage provider (Vercel Blob / Cloudinary / S3 /
-// Supabase Storage, etc.) connected yet. `stageLocalFile` below is the ONLY
-// place in the codebase that touches a selected File — every step of the
-// application wizard calls this function rather than reading files
-// directly, so wiring up real storage later is a one-function change:
+// Phase 3: every file selected in the onboarding wizard is uploaded for real
+// via the uploadMedia Server Action (lib/media.ts), which stores it in
+// Vercel Blob and records a `media` row. This module is the ONLY place a
+// client component touches a selected File — every FileInput/MultiFileInput
+// calls uploadStagedAsset() rather than reading files directly, so the
+// upload mechanism stays a one-module concern.
 //
-//   export async function stageLocalFile(file: File): Promise<StagedAsset> {
-//     const uploaded = await uploadToVercelBlob(file); // or Cloudinary/S3/Supabase
-//     return { id: uploaded.id, fileName: file.name, fileSizeBytes: file.size,
-//               mimeType: file.type, previewUrl: uploaded.publicUrl };
-//   }
-//
-// Today it only creates a browser-local object URL for previewing the file
-// in this session — nothing is uploaded anywhere, and the URL stops working
-// once the tab/page is closed. Do not treat StagedAsset.previewUrl as a
-// permanent or publicly reachable file.
+// Uploading happens immediately on file selection (not deferred to final
+// submit) so the applicant sees a real "uploaded" state (not "attached —
+// not yet uploaded to storage") before they even reach Review & Submit, and
+// so a submit doesn't have to also fire off a batch of uploads.
 // ---------------------------------------------------------------------------
 
 export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -28,11 +24,6 @@ export const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 export interface StageFileResult {
   asset: StagedAsset | null;
   error: string | null;
-}
-
-function createAssetId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `asset-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export function validateImageFile(file: File): string | null {
@@ -46,29 +37,56 @@ export function validateImageFile(file: File): string | null {
 }
 
 /**
- * Stages a single local image file for the application form. Client-only
- * (uses URL.createObjectURL) — call from a client component's file input
- * handler. See the module note above for how this will connect to real
- * storage in a future update.
+ * Uploads a single image file for the application form to permanent
+ * storage. Client-only — call from a client component's file input handler.
+ * `applicationId` is the draft application's id (see
+ * ApplicationWizard.tsx's mount effect, which creates one via
+ * createDraftApplication() before any upload can happen) and `role`
+ * classifies what the photo is for (see MediaRole in
+ * lib/repositories/media.ts) — both are required so the uploaded file's
+ * `media` row can be attributed to the right owner and rendered in the
+ * right place if/when this application is approved.
  */
-export function stageLocalFile(file: File): StageFileResult {
-  const error = validateImageFile(file);
-  if (error) return { asset: null, error };
+export async function uploadStagedAsset(file: File, applicationId: string, role: MediaRole): Promise<StageFileResult> {
+  const validationError = validateImageFile(file);
+  if (validationError) return { asset: null, error: validationError };
+
+  const { uploadMedia } = await import("@/lib/media");
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("ownerType", "application");
+  formData.append("ownerId", applicationId);
+  formData.append("role", role);
+
+  const result = await uploadMedia(formData);
+  if (!result.success || !result.media) {
+    return { asset: null, error: result.error ?? "Upload failed. Please try again." };
+  }
 
   const asset: StagedAsset = {
-    id: createAssetId(),
+    id: result.media.id,
     fileName: file.name,
     fileSizeBytes: file.size,
     mimeType: file.type,
-    previewUrl: URL.createObjectURL(file),
+    previewUrl: result.media.url,
+    mediaId: result.media.id,
   };
   return { asset, error: null };
 }
 
-export function revokeStagedAsset(asset: StagedAsset | null | undefined) {
-  if (asset?.previewUrl?.startsWith("blob:")) {
-    URL.revokeObjectURL(asset.previewUrl);
-  }
+/**
+ * Removes a previously-uploaded photo — deletes both the Blob object and its
+ * `media` row. Safe to call even if `mediaId` is missing (nothing to do).
+ */
+export async function removeStagedAsset(asset: StagedAsset | null | undefined) {
+  if (!asset?.mediaId) return;
+  const { deleteMedia } = await import("@/lib/media");
+  await deleteMedia(asset.mediaId).catch(() => {
+    // Best-effort — if this fails the orphaned file is caught by the
+    // periodic cleanup job noted in PHASE_3_PLAN.md Section 6 (not built
+    // this phase); it must not block the user from continuing the form.
+  });
 }
 
 export function formatFileSize(bytes: number): string {

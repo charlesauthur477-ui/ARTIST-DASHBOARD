@@ -60,7 +60,7 @@ export async function submitBookingInquiry(
     return { success: true, message: "Thank you — your enquiry has been received.", referenceId: "SPAM-IGNORED" };
   }
 
-  const artist = getArtistBySlug(input.artistSlug);
+  const artist = await getArtistBySlug(input.artistSlug);
   if (!artist) {
     return { success: false, message: "We couldn't find that artist. Please refresh and try again." };
   }

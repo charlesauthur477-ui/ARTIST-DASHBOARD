@@ -3,9 +3,9 @@ import { getAllArtists } from "@/lib/artists";
 
 const SUB_ROUTES = ["", "/about", "/music", "/shows", "/gallery", "/band", "/press", "/booking", "/contact"];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = "https://wavelength-artists-demo.vercel.app";
-  const artists = getAllArtists();
+  const artists = await getAllArtists();
 
   const entries: MetadataRoute.Sitemap = [
     { url: base, changeFrequency: "weekly", priority: 1 },

@@ -1,41 +1,52 @@
 "use client";
 
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import Image from "next/image";
-import { ImagePlus, X } from "lucide-react";
+import { CheckCircle2, ImagePlus, Loader2, X } from "lucide-react";
 import type { StagedAsset } from "@/types/application";
-import { ACCEPTED_IMAGE_EXTENSIONS, formatFileSize, revokeStagedAsset, stageLocalFile } from "@/lib/uploads";
+import type { MediaRole } from "@/lib/repositories/media";
+import { ACCEPTED_IMAGE_EXTENSIONS, formatFileSize, removeStagedAsset, uploadStagedAsset } from "@/lib/uploads";
 
 interface FileInputProps {
   label: string;
   asset: StagedAsset | null;
   onChange: (asset: StagedAsset | null) => void;
+  applicationId: string | null;
+  role: MediaRole;
   required?: boolean;
   error?: string;
   helpText?: string;
 }
 
 /**
- * A single-photo picker. Shows a live local preview and an explicit
- * "attached, not yet uploaded" badge — see lib/uploads.ts for why: there is
- * no storage provider connected in V1, so nothing here is a real upload.
+ * A single-photo picker. Uploads to permanent storage (Vercel Blob) as soon
+ * as a file is chosen — see lib/uploads.ts#uploadStagedAsset — and shows a
+ * real "Uploaded" state once that completes, rather than the pre-Phase-3
+ * "attached, not yet uploaded" placeholder.
  */
-export function FileInput({ label, asset, onChange, required, error, helpText }: FileInputProps) {
+export function FileInput({ label, asset, onChange, applicationId, role, required, error, helpText }: FileInputProps) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  function handleFile(fileList: FileList | null) {
+  async function handleFile(fileList: FileList | null) {
     const file = fileList?.[0];
     if (!file) return;
-    const { asset: staged, error: stageError } = stageLocalFile(file);
-    if (stageError) {
-      // Surface via the same error slot the wizard already renders.
-      onChange(null);
-      window.alert(stageError);
+    if (!applicationId) {
+      setUploadError("Still preparing your application — please try again in a moment.");
       return;
     }
-    revokeStagedAsset(asset);
-    onChange(staged);
+    setUploadError(null);
+    setUploading(true);
+    const { asset: uploaded, error: stageError } = await uploadStagedAsset(file, applicationId, role);
+    setUploading(false);
+    if (stageError || !uploaded) {
+      setUploadError(stageError ?? "Upload failed. Please try again.");
+      return;
+    }
+    if (asset) void removeStagedAsset(asset);
+    onChange(uploaded);
   }
 
   return (
@@ -44,7 +55,11 @@ export function FileInput({ label, asset, onChange, required, error, helpText }:
         {label} {required ? <span className="text-bronze-300">*</span> : null}
       </label>
 
-      {asset ? (
+      {uploading ? (
+        <div className="flex min-h-24 w-full items-center justify-center gap-2 rounded-md border border-dashed border-border-subtle px-4 py-6 text-sm text-muted">
+          <Loader2 className="h-4 w-4 animate-spin" /> Uploading...
+        </div>
+      ) : asset ? (
         <div className="flex items-center gap-3 rounded-md border border-border-subtle p-3">
           <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded bg-surface">
             <Image src={asset.previewUrl} alt={`${label} preview`} fill sizes="64px" className="object-cover" unoptimized />
@@ -52,14 +67,14 @@ export function FileInput({ label, asset, onChange, required, error, helpText }:
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm text-foreground/90">{asset.fileName}</p>
             <p className="text-xs text-muted">{formatFileSize(asset.fileSizeBytes)}</p>
-            <p className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-bronze-400/10 px-2 py-0.5 text-[11px] font-medium text-bronze-300">
-              Attached — not yet uploaded to storage
+            <p className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
+              <CheckCircle2 className="h-3 w-3" /> Uploaded
             </p>
           </div>
           <button
             type="button"
             onClick={() => {
-              revokeStagedAsset(asset);
+              void removeStagedAsset(asset);
               onChange(null);
               if (inputRef.current) inputRef.current.value = "";
             }}
@@ -86,17 +101,19 @@ export function FileInput({ label, asset, onChange, required, error, helpText }:
         type="file"
         accept={ACCEPTED_IMAGE_EXTENSIONS}
         className="sr-only"
-        onChange={(e) => handleFile(e.target.files)}
+        onChange={(e) => void handleFile(e.target.files)}
         aria-invalid={!!error}
         aria-describedby={error ? `${id}-error` : helpText ? `${id}-help` : undefined}
       />
 
-      {helpText && !error ? (
+      {helpText && !error && !uploadError ? (
         <p id={`${id}-help`} className="mt-1.5 text-xs text-muted">
           {helpText}
         </p>
       ) : null}
-      {error ? (
+      {uploadError ? (
+        <p className="mt-1.5 text-xs text-red-400">{uploadError}</p>
+      ) : error ? (
         <p id={`${id}-error`} className="mt-1.5 text-xs text-red-400">
           {error}
         </p>

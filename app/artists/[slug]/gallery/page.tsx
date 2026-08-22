@@ -4,13 +4,13 @@ import { getAllArtistSlugs, getArtistBySlug, getArtistGallery } from "@/lib/arti
 import { PageHero } from "@/components/ui/PageHero";
 import { GalleryGrid } from "@/components/gallery/GalleryGrid";
 
-export function generateStaticParams() {
-  return getAllArtistSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  return (await getAllArtistSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/artists/[slug]/gallery">): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) return {};
   return {
     title: `Gallery | ${artist.name}`,
@@ -21,10 +21,10 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]/ga
 
 export default async function GalleryPage({ params }: PageProps<"/artists/[slug]/gallery">) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
 
-  const gallery = getArtistGallery(slug);
+  const gallery = await getArtistGallery(slug);
 
   return (
     <>
