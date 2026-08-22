@@ -9,6 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const entries: MetadataRoute.Sitemap = [
     { url: base, changeFrequency: "weekly", priority: 1 },
+    { url: `${base}/apply`, changeFrequency: "monthly", priority: 0.5 },
   ];
 
   for (const artist of artists) {

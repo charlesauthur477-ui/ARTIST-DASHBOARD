@@ -83,7 +83,15 @@ export default function PlatformHomePage() {
       </section>
 
       <footer className="border-t border-border-subtle px-4 py-8 text-center text-xs text-muted sm:px-6">
-        © {new Date().getFullYear()} {platform.name}. Demo content for development purposes.
+        <p>
+          © {new Date().getFullYear()} {platform.name}. Demo content for development purposes.
+        </p>
+        <p className="mt-2">
+          Are you a musician?{" "}
+          <Link href="/apply" className="text-bronze-300 hover:text-bronze-200">
+            Submit your artist profile
+          </Link>
+        </p>
       </footer>
     </div>
   );

@@ -13,6 +13,7 @@ database, or authentication is included yet — see [Future Architecture](#futur
 - `/` — platform landing page, lists all artists
 - `/artists/aurora-noir` — fully populated demo artist (fictional)
 - `/artists/nova-vale` — second, lighter demo artist, proving the multi-artist architecture
+- `/apply` — artist onboarding / press kit intake form (see [Artist Onboarding](#artist-onboarding--press-kit-apply) below)
 
 Every artist gets: `/`, `/about`, `/music`, `/shows`, `/gallery`, `/band`,
 `/press`, `/booking`, `/contact`.
@@ -156,6 +157,47 @@ No pricing is ever exposed — every format and booking surface says
 booking. Replacing its body with `await fetch("/api/bookings", ...)` or a
 direct write to a booking CRM is the entire integration point for a future
 phase — no UI code changes.
+
+## Artist Onboarding / Press Kit (`/apply`)
+
+A public, no-account-required, 11-step mobile-first wizard for collecting a
+real musician's full profile and media, so it can be turned into a new
+`Artist` record. Send an artist the link `https://<your-domain>/apply` — they
+can complete it entirely from their phone.
+
+Steps: Basic Info → Photos → Music → Videos → Socials → Shows → Band →
+Performance (+ optional technical info) → Press/EPK (+ collaborations +
+testimonials) → Booking → Review & Submit. Each step validates before
+allowing Next; Review shows an editable summary of every section plus the
+two required consent checkboxes before the submit button is enabled.
+
+**Data model** (`types/application.ts`) — `ArtistApplication` deliberately
+reuses the same sub-types as the public `Artist` model (`SocialLinks`,
+`PerformanceFormatId`) so an approved submission maps cleanly onto a new
+artist data file later; see `data/artists/aurora-noir.ts` for the shape it
+should become.
+
+**Submission** (`lib/application.ts`) — `submitArtistApplication()` is a
+Server Action that re-validates everything server-side and logs a
+structured summary to the server console (visible in Vercel's function
+logs), returning a reference ID. **There is no database connected yet** —
+a successful response means "received and logged," not "permanently
+stored." Replace the body of this one function with a real datastore write
+when one exists; no other code needs to change.
+
+**File uploads** (`lib/uploads.ts`) — photos are staged as local
+browser-object-URL previews only (`stageLocalFile()`); nothing is uploaded
+to any server or storage bucket in V1. Every photo field in the wizard
+visibly labels itself "Attached — not yet uploaded to storage" so nobody
+mistakes a preview for a real upload. `stageLocalFile()` is the single
+function to replace when a provider (Vercel Blob, Cloudinary, S3, Supabase
+Storage, etc.) is connected — the wizard and its field components don't
+change.
+
+**Draft autosave** — in-progress answers are mirrored to `localStorage` on
+this device only (cleared automatically on successful submission) so a long
+form isn't lost if an artist's browser closes mid-way. This is a UX
+convenience, not a substitute for the submission itself.
 
 ## Instagram — V1 vs. future
 
