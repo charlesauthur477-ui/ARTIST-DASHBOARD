@@ -14,13 +14,21 @@
 //
 // Run with: npm run db:seed
 // Requires DATABASE_URL and BLOB_READ_WRITE_TOKEN to be set.
+//
+// Idempotent: if an artist with the same slug already exists (e.g. from a
+// previous run of this script), it — and its media rows, since `media` has
+// no DB-level cascade to `artists` (see PHASE_3_PLAN.md's note on the
+// deliberately application-enforced owner_type/owner_id link) — are deleted
+// first, so re-running this script is always safe and never hits a
+// duplicate-slug error.
 // ---------------------------------------------------------------------------
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { put } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { Pool } from "@neondatabase/serverless";
+import { eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { artists as staticArtists } from "@/data/artists";
 import type { Artist } from "@/types/artist";
@@ -64,8 +72,26 @@ async function uploadLocalImage(
   return { url: blob.url, sizeBytes: buffer.byteLength };
 }
 
+async function deleteExistingArtistBySlug(db: ReturnType<typeof drizzle>, slug: string) {
+  const [existing] = await db.select({ id: schema.artists.id }).from(schema.artists).where(eq(schema.artists.slug, slug));
+  if (!existing) return;
+
+  console.log(`  existing artist found for slug "${slug}" — removing before re-seeding...`);
+  const mediaRows = await db.select().from(schema.media).where(eq(schema.media.ownerId, existing.id));
+  for (const m of mediaRows) {
+    await del(m.blobUrl).catch(() => {});
+  }
+  await db.delete(schema.media).where(eq(schema.media.ownerId, existing.id));
+  // Child tables (releases, artist_videos, gallery_images, shows,
+  // band_members, performance_formats, collaborations, testimonials) all
+  // have onDelete: "cascade" to artists.id, so deleting the artist row
+  // cleans those up automatically.
+  await db.delete(schema.artists).where(eq(schema.artists.id, existing.id));
+}
+
 async function seedArtist(db: ReturnType<typeof drizzle>, artist: Artist) {
   console.log(`Seeding ${artist.name} (${artist.slug})...`);
+  await deleteExistingArtistBySlug(db, artist.slug);
 
   const [row] = await db
     .insert(schema.artists)
@@ -135,7 +161,6 @@ async function seedArtist(db: ReturnType<typeof drizzle>, artist: Artist) {
     path.basename(artist.ogImage)
   );
 
-  const { eq } = await import("drizzle-orm");
   await db
     .update(schema.artists)
     .set({
