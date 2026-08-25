@@ -10,6 +10,6 @@
 // non-"use server" module.
 // ---------------------------------------------------------------------------
 
-import { approveApplication, markUnderReview, rejectApplication } from "@/lib/repositories/approvals";
+import { approveApplication, markUnderReview, rejectApplication, returnApplicationToReview } from "@/lib/repositories/approvals";
 
-export { approveApplication, rejectApplication, markUnderReview };
+export { approveApplication, rejectApplication, markUnderReview, returnApplicationToReview };

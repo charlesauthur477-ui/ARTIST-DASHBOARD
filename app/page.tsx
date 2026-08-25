@@ -35,8 +35,17 @@ export default async function PlatformHomePage() {
 
       <section className="relative flex min-h-[70vh] items-end overflow-hidden">
         <div className="absolute inset-0">
-          <Image src={platform.heroImage} alt="" fill priority sizes="100vw" className="object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/10" />
+          {platform.heroImage ? (
+            <>
+              <Image src={platform.heroImage} alt="" fill priority sizes="100vw" className="object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/10" />
+            </>
+          ) : (
+            // No platform hero image uploaded yet — fall back to the same
+            // dark editorial background used elsewhere on the site instead
+            // of requesting a file that doesn't exist.
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-surface to-background" />
+          )}
         </div>
         <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6 sm:pb-24">
           <p className="text-xs font-medium tracking-[0.3em] text-bronze-300 uppercase">Artist Management</p>

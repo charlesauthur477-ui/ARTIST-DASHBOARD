@@ -210,4 +210,8 @@ export interface Artist {
   instagramFeed: InstagramPost[];
   ogImage: string;
   isDemo?: boolean;
+  /** Phase 4 — admin-editable SEO overrides. Undefined for static demo data; generateMetadata falls back to name/shortBio when unset. */
+  seoTitle?: string;
+  seoDescription?: string;
+  canonicalUrl?: string;
 }

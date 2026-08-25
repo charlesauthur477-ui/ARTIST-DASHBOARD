@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { MotionProvider } from "@/components/providers/MotionProvider";
+import { PreviewBanner } from "@/components/PreviewBanner";
 
 // NOTE on fonts: this project targets next/font/google (Playfair Display +
 // Inter) for the premium editorial look described in the brief. Some build
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <PreviewBanner />
         <MotionProvider>{children}</MotionProvider>
       </body>
     </html>

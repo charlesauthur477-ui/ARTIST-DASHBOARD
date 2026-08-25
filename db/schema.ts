@@ -18,6 +18,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -51,6 +52,10 @@ export const mediaRoleEnum = pgEnum("media_role", [
 ]);
 
 export const releaseTypeEnum = pgEnum("release_type", ["album", "ep", "single"]);
+
+// Phase 4 — admin dashboard. See PHASE_4_PLAN.md Section 10 for the full
+// rationale; every change below is additive to the Phase 3 schema.
+export const adminRoleEnum = pgEnum("admin_role", ["super_admin", "manager", "editor"]);
 
 // ---------------------------------------------------------------------------
 // artist_applications + children
@@ -130,7 +135,10 @@ export const artistApplications = pgTable("artist_applications", {
   // Lifecycle
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-  reviewedBy: text("reviewed_by"),
+  // Phase 4: was `text("reviewed_by")` in Phase 3 and never actually
+  // written to by any code path — retyped to a real FK now that an
+  // `admin_users` table exists to point at. See PHASE_4_PLAN.md Section 10.
+  reviewedBy: uuid("reviewed_by").references(() => adminUsers.id),
   rejectionReason: text("rejection_reason"),
   linkedArtistId: uuid("linked_artist_id"),
 
@@ -293,6 +301,17 @@ export const artists = pgTable("artists", {
   aboutImageMediaId: uuid("about_image_media_id"),
   ogImageMediaId: uuid("og_image_media_id"),
 
+  // Phase 4 — SEO tab (Section 8/10). Nullable: existing generateMetadata
+  // logic remains the fallback whenever these are unset, so no existing
+  // artist page changes behavior until an admin explicitly fills them in.
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  canonicalUrl: text("canonical_url"),
+
+  // Phase 4 — "who last changed this artist," a real FK (unlike media's
+  // deliberately non-FK owner_id) since there's exactly one target table.
+  updatedBy: uuid("updated_by").references(() => adminUsers.id),
+
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -436,4 +455,98 @@ export const media = pgTable("media", {
   metadata: jsonb("metadata").$type<Record<string, string>>().notNull().default({}),
   sortOrder: integer("sort_order").notNull().default(0),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Auth.js v5 adapter tables (Credentials provider, database
+// sessions). Table shapes follow Auth.js's own documented Drizzle/Postgres
+// adapter schema (https://authjs.dev/getting-started/adapters/drizzle)
+// verbatim, deliberately kept separate from our own `admin_users` business
+// table below rather than merged into it — that keeps the adapter on a
+// shape it's known to work with, and keeps role/password/active-status data
+// out of a table Auth.js itself writes to. `accounts` and
+// `verification_tokens` exist only to satisfy the adapter's schema contract
+// (both are required by @auth/drizzle-adapter's types) — this app has no
+// OAuth providers and no email/magic-link sign-in, so neither table is ever
+// written to at runtime; they're expected to stay empty.
+// ---------------------------------------------------------------------------
+
+export const users = pgTable("user", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name"),
+  email: text("email").notNull().unique(),
+  emailVerified: timestamp("emailVerified", { withTimezone: true }),
+  image: text("image"),
+});
+
+export const accounts = pgTable(
+  "account",
+  {
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("providerAccountId").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
+  },
+  (account) => [primaryKey({ columns: [account.provider, account.providerAccountId] })]
+);
+
+export const sessions = pgTable("session", {
+  sessionToken: text("sessionToken").primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: timestamp("expires", { withTimezone: true }).notNull(),
+});
+
+export const verificationTokens = pgTable(
+  "verificationToken",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires", { withTimezone: true }).notNull(),
+  },
+  (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })]
+);
+
+// ---------------------------------------------------------------------------
+// admin_users — our own business data for an admin account: 1:1 with `user`
+// by id (Auth.js owns name/email/image on `user`; this table owns
+// everything role/access-related). See PHASE_4_PLAN.md Sections 1 & 3.
+// ---------------------------------------------------------------------------
+
+export const adminUsers = pgTable("admin_users", {
+  id: uuid("id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  role: adminRoleEnum("role").notNull().default("editor"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// activity_log — single unified audit/activity table (PHASE_4_PLAN.md
+// Section 9). Written from one central helper (lib/admin/activity.ts),
+// never inserted into directly from scattered call sites.
+// ---------------------------------------------------------------------------
+
+export const activityLog = pgTable("activity_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actorAdminUserId: uuid("actor_admin_user_id").references(() => adminUsers.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  summary: text("summary").notNull().default(""),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

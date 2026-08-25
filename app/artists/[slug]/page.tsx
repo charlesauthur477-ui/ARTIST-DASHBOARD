@@ -26,22 +26,28 @@ export async function generateMetadata({ params }: PageProps<"/artists/[slug]">)
   const { slug } = await params;
   const artist = await getArtistBySlug(slug);
   if (!artist) return {};
+  // Phase 4: admin-editable SEO overrides (artist.seoTitle/seoDescription/
+  // canonicalUrl) take precedence when set; otherwise fall back to the
+  // exact Phase 3 behavior below — unchanged for every artist that hasn't
+  // had SEO fields filled in yet.
+  const title = artist.seoTitle || artist.name;
+  const description = artist.seoDescription || artist.shortBio;
   return {
-    title: artist.name,
-    description: artist.shortBio,
+    title,
+    description,
     openGraph: {
-      title: `${artist.name} — Official Website`,
-      description: artist.shortBio,
+      title: `${title} — Official Website`,
+      description,
       images: [{ url: artist.ogImage }],
       type: "profile",
     },
     twitter: {
       card: "summary_large_image",
-      title: artist.name,
-      description: artist.shortBio,
+      title,
+      description,
       images: [artist.ogImage],
     },
-    alternates: { canonical: `/artists/${artist.slug}` },
+    alternates: { canonical: artist.canonicalUrl || `/artists/${artist.slug}` },
   };
 }
 

@@ -57,7 +57,11 @@ export interface ApproveApplicationResult {
  * and independently testable (e.g. from a script) ahead of the admin phase
  * that will call it from a real "Approve" button.
  */
-export async function approveApplication(applicationId: string, requestedSlug: string): Promise<ApproveApplicationResult> {
+export async function approveApplication(
+  applicationId: string,
+  requestedSlug: string,
+  reviewedBy?: string
+): Promise<ApproveApplicationResult> {
   const slug = requestedSlug.trim().toLowerCase();
   const slugCheck = await validateSlugForApproval(slug);
   if (!slugCheck.valid) {
@@ -239,7 +243,13 @@ export async function approveApplication(applicationId: string, requestedSlug: s
 
       await tx
         .update(schema.artistApplications)
-        .set({ status: "approved", reviewedAt: new Date(), linkedArtistId: artist.id, updatedAt: new Date() })
+        .set({
+          status: "approved",
+          reviewedAt: new Date(),
+          reviewedBy: reviewedBy ?? null,
+          linkedArtistId: artist.id,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.artistApplications.id, application.id));
 
       return artist.id;
@@ -254,14 +264,34 @@ export async function approveApplication(applicationId: string, requestedSlug: s
   }
 }
 
-export async function rejectApplication(applicationId: string, reason: string): Promise<{ success: boolean; error?: string }> {
+export async function rejectApplication(
+  applicationId: string,
+  reason: string,
+  reviewedBy?: string
+): Promise<{ success: boolean; error?: string }> {
   const record = await getApplicationById(applicationId);
   if (!record) return { success: false, error: "Application not found." };
-  await setApplicationReviewStatus(applicationId, { status: "rejected", rejectionReason: reason });
+  await setApplicationReviewStatus(applicationId, { status: "rejected", rejectionReason: reason, reviewedBy });
   return { success: true };
 }
 
 export async function markUnderReview(applicationId: string, reviewedBy?: string): Promise<{ success: boolean }> {
+  await setApplicationReviewStatus(applicationId, { status: "under_review", reviewedBy });
+  return { success: true };
+}
+
+/**
+ * "Return to Review" — the one Server Action the Phase 4 spec calls for
+ * that doesn't map onto an existing Phase 3 function 1:1. Rather than a new
+ * subsystem, it's a thin wrapper over the same
+ * setApplicationReviewStatus() every other review action already uses,
+ * moving a previously approved/rejected application back to under_review
+ * so a manager can reconsider it. Deliberately does NOT touch any artist
+ * record created by a prior approval — undoing that is a separate,
+ * explicit decision (e.g. archiving the artist) a manager makes on purpose,
+ * not an automatic side effect of reopening the application.
+ */
+export async function returnApplicationToReview(applicationId: string, reviewedBy?: string): Promise<{ success: boolean }> {
   await setApplicationReviewStatus(applicationId, { status: "under_review", reviewedBy });
   return { success: true };
 }

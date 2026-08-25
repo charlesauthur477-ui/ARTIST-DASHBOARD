@@ -93,3 +93,32 @@ body {
 .text-balance {
   text-wrap: balance;
 }
+
+/* ---------------------------------------------------------------------------
+ * Phase 4 — admin dashboard theme.
+ *
+ * Deliberately a different, plain/professional palette from the public
+ * site's editorial bronze-on-black theme above — the admin surface is an
+ * internal tool, not a marketing page, and PHASE_4_PLAN.md is explicit that
+ * the public site's design must not be redesigned to accommodate it. Scoped
+ * to .admin-shell (set on the root element of the /admin layout) so nothing
+ * here leaks into the public artist pages.
+ * ------------------------------------------------------------------------ */
+.admin-shell {
+  --admin-bg: #f8fafc;
+  --admin-surface: #ffffff;
+  --admin-border: #e2e8f0;
+  --admin-text: #0f172a;
+  --admin-muted: #64748b;
+  --admin-primary: #1d4ed8;
+  --admin-primary-hover: #1e40af;
+  --admin-danger: #dc2626;
+  --admin-danger-hover: #b91c1c;
+  --admin-success: #16a34a;
+  --admin-warning: #d97706;
+
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  min-height: 100%;
+}

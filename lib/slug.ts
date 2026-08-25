@@ -21,7 +21,14 @@ export interface SlugCheckResult {
   error?: string;
 }
 
-export async function validateSlugForApproval(slug: string): Promise<SlugCheckResult> {
+/**
+ * `excludeArtistId` — Phase 4 addition: when re-validating a slug during
+ * publish/save for an artist that already exists (renaming while
+ * publishing), the artist's own current row must not count as a collision
+ * against itself. Optional and defaulted so the Phase 3 approval call site
+ * (a brand new artist, nothing to exclude) is unaffected.
+ */
+export async function validateSlugForApproval(slug: string, excludeArtistId?: string): Promise<SlugCheckResult> {
   if (!slug || slug.length < 2) {
     return { valid: false, error: "Slug must be at least 2 characters." };
   }
@@ -35,7 +42,7 @@ export async function validateSlugForApproval(slug: string): Promise<SlugCheckRe
   if (RESERVED.includes(slug)) {
     return { valid: false, error: `"${slug}" is a reserved route and cannot be used as an artist slug.` };
   }
-  const taken = await slugExists(slug);
+  const taken = await slugExists(slug, excludeArtistId);
   if (taken) {
     return { valid: false, error: `The slug "${slug}" is already in use by another artist. Choose a different slug.` };
   }

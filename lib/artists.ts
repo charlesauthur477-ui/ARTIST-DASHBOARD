@@ -47,8 +47,17 @@ export async function getAllArtists(): Promise<Artist[]> {
 
 export async function getArtistBySlug(slug: string): Promise<Artist | undefined> {
   if (isDatabaseEnabled()) {
-    const { getArtistBySlugDb } = await import("@/lib/repositories/artists");
-    return getArtistBySlugDb(slug);
+    // Phase 4 Draft Mode preview (PHASE_4_PLAN.md Section 8): when an admin
+    // has enabled Draft Mode (via /admin/artists/[id]/preview), bypass the
+    // status='active' filter so this exact same function — used by every
+    // public artist page — can render a draft/unpublished artist for them.
+    // Enabling Draft Mode also excludes this render from Next's ISR/response
+    // cache (see next/headers' draftMode() docs), so a draft is never
+    // accidentally cached and served to a real visitor.
+    const { draftMode } = await import("next/headers");
+    const { isEnabled } = await draftMode();
+    const { getArtistBySlugDb, getArtistBySlugAnyStatus } = await import("@/lib/repositories/artists");
+    return isEnabled ? getArtistBySlugAnyStatus(slug) : getArtistBySlugDb(slug);
   }
   return staticArtists.find((artist) => artist.slug === slug);
 }

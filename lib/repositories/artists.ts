@@ -170,6 +170,9 @@ async function assembleArtist(row: ArtistRow): Promise<Artist> {
     instagramFeed: [],
     ogImage: mediaUrl(mediaMap, row.ogImageMediaId) || mediaUrl(mediaMap, row.heroImageMediaId),
     isDemo: false,
+    seoTitle: row.seoTitle ?? undefined,
+    seoDescription: row.seoDescription ?? undefined,
+    canonicalUrl: row.canonicalUrl ?? undefined,
   };
 }
 
@@ -199,11 +202,28 @@ export async function getAllActiveArtistSlugs(): Promise<string[]> {
   return rows.map((r) => r.slug);
 }
 
-/** Used by the slug-uniqueness check during approval (lib/slug.ts). */
-export async function slugExists(slug: string): Promise<boolean> {
+/**
+ * Phase 4 — Draft Mode preview support (PHASE_4_PLAN.md Section 8): the one
+ * read path that intentionally does NOT filter by status='active', so an
+ * authenticated admin's preview request can render a draft/inactive/
+ * archived artist through the exact same public page component. Never
+ * called from any public code path — only from lib/artists.ts's
+ * getArtistBySlug when draftMode().isEnabled is true.
+ */
+export async function getArtistBySlugAnyStatus(slug: string): Promise<Artist | undefined> {
+  const db = getDb();
+  const [row] = await db.select().from(schema.artists).where(eq(schema.artists.slug, slug)).limit(1);
+  if (!row) return undefined;
+  return assembleArtist(row);
+}
+
+/** Used by the slug-uniqueness check during approval/publishing (lib/slug.ts). `excludeId` skips an artist's own row (renaming while publishing). */
+export async function slugExists(slug: string, excludeId?: string): Promise<boolean> {
   const db = getDb();
   const [row] = await db.select({ id: schema.artists.id }).from(schema.artists).where(eq(schema.artists.slug, slug)).limit(1);
-  return Boolean(row);
+  if (!row) return false;
+  if (excludeId && row.id === excludeId) return false;
+  return true;
 }
 
 export async function setArtistStatus(artistId: string, status: "draft" | "active" | "inactive" | "archived") {

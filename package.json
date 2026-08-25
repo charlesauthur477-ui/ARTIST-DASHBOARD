@@ -10,22 +10,28 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
     "db:seed": "tsx --env-file=.env.local scripts/seed_demo_artists.ts",
-    "db:verify": "tsx --env-file=.env.local scripts/verify_phase3.ts"
+    "db:verify": "tsx --env-file=.env.local scripts/verify_phase3.ts",
+    "admin:create": "tsx --env-file=.env.local scripts/create_admin_user.ts",
+    "db:inspect-reviewed-by": "tsx --env-file=.env.local scripts/inspect_reviewed_by.ts"
   },
   "dependencies": {
+    "@auth/drizzle-adapter": "^1.11.3",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.8.0",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "framer-motion": "^13.1.1",
     "lucide-react": "^1.33.0",
     "next": "16.3.1",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
