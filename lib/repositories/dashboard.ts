@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +50,17 @@ export async function getRecentApplications(limit = 5) {
       createdAt: schema.artistApplications.createdAt,
     })
     .from(schema.artistApplications)
-    .orderBy(desc(schema.artistApplications.createdAt))
+    // PHASE_4_PLAN.md Section 4: "last 5 by submitted_at". An application
+    // still sitting in `draft` (an abandoned /apply wizard session that was
+    // never submitted) has no meaningful submitted_at and should never show
+    // up here — previously this ordered by created_at with no status
+    // filter, so an unsubmitted draft could appear as an "Untitled
+    // application". Both conditions are kept (status != 'draft' AND
+    // submitted_at is not null) as a belt-and-suspenders guard: the status
+    // check is the primary intent-match, the null check protects against
+    // any row where submitted_at wasn't set for some other reason.
+    .where(and(ne(schema.artistApplications.status, "draft"), isNotNull(schema.artistApplications.submittedAt)))
+    .orderBy(desc(schema.artistApplications.submittedAt))
     .limit(limit);
 }
 

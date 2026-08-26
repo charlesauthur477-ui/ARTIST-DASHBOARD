@@ -226,15 +226,27 @@ export async function setApplicationReviewStatus(
   update: { status: "under_review" | "approved" | "rejected"; reviewedBy?: string; rejectionReason?: string; linkedArtistId?: string }
 ) {
   const db = getDb();
-  await db
-    .update(schema.artistApplications)
-    .set({
-      status: update.status,
-      reviewedAt: new Date(),
-      reviewedBy: update.reviewedBy ?? null,
-      rejectionReason: update.rejectionReason ?? null,
-      linkedArtistId: update.linkedArtistId ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.artistApplications.id, applicationId));
+
+  // linkedArtistId is intentionally omitted from the SET clause unless the
+  // caller explicitly passes it. Previously this always wrote
+  // `update.linkedArtistId ?? null`, which meant any call that didn't pass
+  // linkedArtistId (e.g. returnApplicationToReview()) silently cleared an
+  // already-approved application's link to the artist it created — even
+  // though the artist record itself was correctly left untouched. Omitting
+  // the key entirely when not provided preserves whatever value is already
+  // in the row (including staying null if it was already null), so
+  // "Return to Review" can no longer sever that relationship as a side
+  // effect of an unrelated status change.
+  const values: Partial<typeof schema.artistApplications.$inferInsert> = {
+    status: update.status,
+    reviewedAt: new Date(),
+    reviewedBy: update.reviewedBy ?? null,
+    rejectionReason: update.rejectionReason ?? null,
+    updatedAt: new Date(),
+  };
+  if (update.linkedArtistId !== undefined) {
+    values.linkedArtistId = update.linkedArtistId;
+  }
+
+  await db.update(schema.artistApplications).set(values).where(eq(schema.artistApplications.id, applicationId));
 }
