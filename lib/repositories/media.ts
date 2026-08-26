@@ -95,6 +95,7 @@ export async function listAllMediaWithReferences() {
     collabRows,
     applicationReleaseRows,
     applicationVideoBandRows,
+    applicationIdRows,
   ] = await Promise.all([
     db.select().from(schema.media),
     db
@@ -112,6 +113,19 @@ export async function listAllMediaWithReferences() {
     db.select({ logoMediaId: schema.collaborations.logoMediaId }).from(schema.collaborations),
     db.select({ artworkMediaId: schema.applicationReleases.artworkMediaId }).from(schema.applicationReleases),
     db.select({ photoMediaId: schema.applicationBandMembers.photoMediaId }).from(schema.applicationBandMembers),
+    // Every existing artist_applications.id — used below to protect ALL
+    // media owned directly by a still-existing application (profile/hero/
+    // gallery/etc. photos), not just the media reachable through a specific
+    // child-table FK column. Unlike an artist, an application has no
+    // dedicated *_media_id columns on its own row — a photo uploaded during
+    // the /apply wizard is "referenced" purely by media.owner_type='application'
+    // + media.owner_id matching a live application, with no other pointer
+    // anywhere. The FK-column-only check below this point never covered
+    // that case, so any pending/under_review application's own photos were
+    // being flagged as orphaned and were deletable through the "unused
+    // media" cleanup flow. See lib/repositories/applications.ts for
+    // artist_applications' schema-backed id column this reuses as-is.
+    db.select({ id: schema.artistApplications.id }).from(schema.artistApplications),
   ]);
 
   const referenced = new Set<string>();
@@ -128,7 +142,21 @@ export async function listAllMediaWithReferences() {
   for (const row of applicationReleaseRows) if (row.artworkMediaId) referenced.add(row.artworkMediaId);
   for (const row of applicationVideoBandRows) if (row.photoMediaId) referenced.add(row.photoMediaId);
 
+  const existingApplicationIds = new Set(applicationIdRows.map((r) => r.id));
+
   return allMedia
     .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
-    .map((m) => ({ ...m, isOrphaned: !referenced.has(m.id) }));
+    .map((m) => {
+      // Any application-owned media whose parent artist_applications row
+      // still exists is protected, independent of the FK-column checks
+      // above — the application itself is sufficient to reference its own
+      // media, matching how it's actually used in
+      // app/admin/(dashboard)/applications/[id]/page.tsx (getMediaByOwner)
+      // and how it's re-pointed wholesale on approval (see
+      // lib/repositories/approvals.ts's re-parenting of every media row
+      // owned by the application).
+      const isOwnedByLiveApplication = m.ownerType === "application" && existingApplicationIds.has(m.ownerId);
+      const isOrphaned = !isOwnedByLiveApplication && !referenced.has(m.id);
+      return { ...m, isOrphaned };
+    });
 }
