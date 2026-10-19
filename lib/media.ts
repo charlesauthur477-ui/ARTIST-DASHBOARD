@@ -3,6 +3,25 @@
 import { del, put } from "@vercel/blob";
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES } from "@/lib/uploads";
 import { deleteMediaRow, getMediaById, insertMedia, type MediaOwnerType, type MediaRole } from "@/lib/repositories/media";
+import { getAdminSessionUser } from "@/lib/admin/auth";
+import { getArtistSessionUser } from "@/lib/artist/session";
+
+// Sprint 5 hardening: ownerType "artist" writes must be authorized either by
+// an admin session or by the artist themselves (their session artistId must
+// match the ownerId being written/deleted). ownerType "application" stays
+// unauthenticated on purpose — the public /apply wizard has no session at
+// all, by design. Centralized here rather than only in the Artist Portal's
+// own action layer, because AdminImagePicker (and therefore uploadMedia/
+// deleteMedia) is called directly from the browser for BOTH the admin CMS
+// and the Artist Portal — the client-supplied ownerId was previously
+// trusted with no check at all, which would have let an authenticated
+// artist upload/delete media attributed to a DIFFERENT artist by calling
+// this action directly rather than through the UI.
+async function isAuthorizedForArtistOwner(ownerId: string): Promise<boolean> {
+  const [adminUser, artistUser] = await Promise.all([getAdminSessionUser(), getArtistSessionUser()]);
+  if (adminUser) return true;
+  return Boolean(artistUser && artistUser.artistId === ownerId);
+}
 
 // ---------------------------------------------------------------------------
 // Media upload / delete — the ONLY module that talks to Vercel Blob.
@@ -60,6 +79,9 @@ export async function uploadMedia(formData: FormData): Promise<UploadMediaResult
   if (typeof role !== "string" || !VALID_ROLES.includes(role as MediaRole)) {
     return { success: false, error: "Invalid upload role." };
   }
+  if (ownerType === "artist" && !(await isAuthorizedForArtistOwner(ownerId))) {
+    return { success: false, error: "Not authorized to upload media for this artist." };
+  }
 
   // Server-side validation — never trust the client-side check alone (the
   // same principle already applied to form field validation in
@@ -115,6 +137,9 @@ export interface DeleteMediaResult {
 export async function deleteMedia(mediaId: string): Promise<DeleteMediaResult> {
   const row = await getMediaById(mediaId);
   if (!row) return { success: false, error: "Media not found." };
+  if (row.ownerType === "artist" && !(await isAuthorizedForArtistOwner(row.ownerId))) {
+    return { success: false, error: "Not authorized to delete this media." };
+  }
 
   try {
     await del(row.blobUrl);

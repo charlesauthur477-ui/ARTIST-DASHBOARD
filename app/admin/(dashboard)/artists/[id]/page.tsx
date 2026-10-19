@@ -1,6 +1,8 @@
 import { getArtistRowById } from "@/lib/repositories/artistAdmin";
 import { getMediaByOwner } from "@/lib/repositories/media";
+import { getArtistUserByArtistId } from "@/lib/repositories/artistUsers";
 import { Card, CardBody, CardHeader } from "@/components/admin/ui/Card";
+import { PortalAccessCard } from "@/components/admin/artists/PortalAccessCard";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +12,7 @@ export default async function ArtistOverviewPage({ params }: { params: Promise<{
   const artist = await getArtistRowById(id);
   if (!artist) notFound();
   const media = await getMediaByOwner("artist", id);
+  const portalUser = await getArtistUserByArtistId(id);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -45,6 +48,15 @@ export default async function ArtistOverviewPage({ params }: { params: Promise<{
           <p className="font-medium">Media</p>
         </CardHeader>
         <CardBody className="text-sm text-[var(--admin-muted)]">{media.length} file{media.length === 1 ? "" : "s"} uploaded for this artist.</CardBody>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <p className="font-medium">Artist Portal Access</p>
+        </CardHeader>
+        <CardBody>
+          <PortalAccessCard artistId={id} existingEmail={portalUser?.email ?? null} isActive={portalUser?.isActive ?? null} />
+        </CardBody>
       </Card>
     </div>
   );

@@ -7,12 +7,21 @@ import { Button } from "@/components/admin/ui/Button";
 
 const SOCIAL_PLATFORMS = ["instagram", "youtube", "spotify", "appleMusic", "tiktok", "facebook", "x"] as const;
 
+type SocialPatch = {
+  instagramHandle: string | null;
+  socialLinks: Record<string, string>;
+  streamingLinks: { spotify?: string; appleMusic?: string; youtube?: string; soundcloud?: string };
+};
+type SaveAction = (patch: SocialPatch) => Promise<{ error: string | null }>;
+
 export function SocialTabForm({
   artistId,
   initial,
+  saveAction,
 }: {
   artistId: string;
   initial: { instagramHandle: string; socialLinks: Record<string, string>; streamingLinks: { spotify?: string; appleMusic?: string; youtube?: string; soundcloud?: string } };
+  saveAction?: SaveAction;
 }) {
   const [instagramHandle, setInstagramHandle] = useState(initial.instagramHandle);
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>(initial.socialLinks);
@@ -20,11 +29,12 @@ export function SocialTabForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const onSave: SaveAction = saveAction ?? ((patch) => updateArtistProfileAction(artistId, patch));
 
   function save() {
     setError(null);
     startTransition(async () => {
-      const result = await updateArtistProfileAction(artistId, {
+      const result = await onSave({
         instagramHandle: instagramHandle || null,
         socialLinks,
         streamingLinks,

@@ -24,26 +24,50 @@ export interface TestimonialItem {
 const emptyCollab: CollaborationItem = { name: "", type: "", logoMediaId: null, logoUrl: null, description: "" };
 const emptyTestimonial: TestimonialItem = { quote: "", clientName: "", eventType: "" };
 
+type PressKit = { bio: string; shortBio: string; downloadUrl: string };
+export interface PressTabActions {
+  savePressKit?: (kit: PressKit) => Promise<{ error: string | null }>;
+  saveCollaborations?: (items: CollaborationItem[]) => Promise<{ error: string | null }>;
+  saveTestimonials?: (items: TestimonialItem[]) => Promise<{ error: string | null }>;
+}
+
 export function PressTab({
   artistId,
   pressKit,
   collaborations,
   testimonials,
+  actions,
 }: {
   artistId: string;
-  pressKit: { bio: string; shortBio: string; downloadUrl: string };
+  pressKit: PressKit;
   collaborations: CollaborationItem[];
   testimonials: TestimonialItem[];
+  actions?: PressTabActions;
 }) {
   const [kit, setKit] = useState(pressKit);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
+  const savePressKit = actions?.savePressKit ?? ((k: PressKit) => updateArtistProfileAction(artistId, { pressKit: k }));
+  const saveCollaborations =
+    actions?.saveCollaborations ??
+    ((all: CollaborationItem[]) =>
+      replaceCollaborationsAction(
+        artistId,
+        all.map((item) => ({
+          name: item.name,
+          type: item.type,
+          logoMediaId: item.logoMediaId,
+          description: item.description || null,
+        }))
+      ));
+  const saveTestimonials = actions?.saveTestimonials ?? ((all: TestimonialItem[]) => replaceTestimonialsAction(artistId, all));
+
   function saveKit() {
     setError(null);
     startTransition(async () => {
-      const result = await updateArtistProfileAction(artistId, { pressKit: kit });
+      const result = await savePressKit(kit);
       if (result.error) setError(result.error);
       else setSavedAt(Date.now());
     });
@@ -80,17 +104,7 @@ export function PressTab({
           items={collaborations}
           emptyItem={emptyCollab}
           itemLabel={(item) => item.name || "Untitled collaboration"}
-          onSave={async (all) =>
-            replaceCollaborationsAction(
-              artistId,
-              all.map((item) => ({
-                name: item.name,
-                type: item.type,
-                logoMediaId: item.logoMediaId,
-                description: item.description || null,
-              }))
-            )
-          }
+          onSave={saveCollaborations}
           renderItem={(item, update) => (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -126,7 +140,7 @@ export function PressTab({
           items={testimonials}
           emptyItem={emptyTestimonial}
           itemLabel={(item) => item.clientName || "Untitled testimonial"}
-          onSave={async (all) => replaceTestimonialsAction(artistId, all)}
+          onSave={saveTestimonials}
           renderItem={(item, update) => (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>

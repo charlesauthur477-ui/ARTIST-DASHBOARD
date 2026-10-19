@@ -1,6 +1,6 @@
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getApplicationById, setApplicationReviewStatus } from "@/lib/repositories/applications";
 import { validateSlugForApproval } from "@/lib/slug";
@@ -203,11 +203,25 @@ export async function approveApplication(
 
       // Re-point every media row owned by this application to the new
       // artist. No file is re-uploaded — only the ownership columns change.
-      const applicationMedia = await tx
+      //
+      // The ownerId match is done here, in the SQL WHERE clause, rather
+      // than by pulling every application-owned media row in the whole
+      // system and filtering by `m.ownerId === application.id` in
+      // JavaScript afterward (the previous approach). That JS-side filter
+      // compared a value read via this transaction's pooled/WebSocket
+      // connection (drizzle-orm/neon-serverless) against `application.id`,
+      // which was read earlier via a *different* connection/driver
+      // (getApplicationById() -> lib/db.ts's HTTP driver). Doing the
+      // ownerId comparison directly in Postgres removes that cross-driver
+      // dependency entirely — the database itself decides which rows
+      // belong to this exact application, which is both the correct way to
+      // scope this query and the safest way to guarantee every one of this
+      // application's photos is found and reassigned, regardless of how
+      // any particular client library happens to serialize a uuid value.
+      const ownedByThisApplication = await tx
         .select()
         .from(schema.media)
-        .where(eq(schema.media.ownerType, "application"));
-      const ownedByThisApplication = applicationMedia.filter((m) => m.ownerId === application.id);
+        .where(and(eq(schema.media.ownerType, "application"), eq(schema.media.ownerId, application.id)));
 
       for (const m of ownedByThisApplication) {
         await tx.update(schema.media).set({ ownerType: "artist", ownerId: artist.id }).where(eq(schema.media.id, m.id));
@@ -271,6 +285,21 @@ export async function rejectApplication(
 ): Promise<{ success: boolean; error?: string }> {
   const record = await getApplicationById(applicationId);
   if (!record) return { success: false, error: "Application not found." };
+
+  // Production-readiness audit finding: unlike approveApplication (which
+  // refuses to run against an already-approved application), this had no
+  // status guard at all — an already-approved application (which has
+  // already spawned a live artists row via sourceApplicationId) could be
+  // flipped to "rejected" while that artist record silently kept existing
+  // untouched, leaving the application and artist records disagreeing with
+  // each other. Rejecting an application only makes sense pre-approval.
+  if (record.application.status === "approved") {
+    return {
+      success: false,
+      error: 'This application has already been approved and has a linked artist record — use "Return to Review" and archive the artist instead of rejecting it directly.',
+    };
+  }
+
   await setApplicationReviewStatus(applicationId, { status: "rejected", rejectionReason: reason, reviewedBy });
   return { success: true };
 }

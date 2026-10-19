@@ -5,17 +5,23 @@ import { updateArtistProfileAction } from "@/lib/admin/artistActions";
 import { Input, Label, Textarea, FieldError } from "@/components/admin/ui/FormField";
 import { Button } from "@/components/admin/ui/Button";
 
+type ProfileValues = { name: string; stageName: string; tagline: string; genre: string; location: string; bio: string; shortBio: string };
+type SaveAction = (values: ProfileValues) => Promise<{ error: string | null }>;
+
 export function ProfileTabForm({
   artistId,
   initial,
+  saveAction,
 }: {
   artistId: string;
-  initial: { name: string; stageName: string; tagline: string; genre: string; location: string; bio: string; shortBio: string };
+  initial: ProfileValues;
+  saveAction?: SaveAction;
 }) {
   const [values, setValues] = useState(initial);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const onSave: SaveAction = saveAction ?? ((v) => updateArtistProfileAction(artistId, v));
 
   function set<K extends keyof typeof values>(key: K, value: (typeof values)[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -24,7 +30,7 @@ export function ProfileTabForm({
   function handleSave() {
     setError(null);
     startTransition(async () => {
-      const result = await updateArtistProfileAction(artistId, values);
+      const result = await onSave(values);
       if (result.error) setError(result.error);
       else setSavedAt(Date.now());
     });

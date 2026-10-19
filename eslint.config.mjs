@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Archived/removed code kept on disk for reference only — never part of
+    // the active application, must never be linted or type-checked.
+    "_to_delete/**",
   ]),
 ]);
 

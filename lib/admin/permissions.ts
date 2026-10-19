@@ -53,6 +53,21 @@ export function canViewActivity(role: AdminRole): boolean {
   return role === "super_admin" || role === "manager";
 }
 
+/** View and change the status of booking requests. */
+export function canManageBookings(role: AdminRole): boolean {
+  return role === "super_admin" || role === "manager";
+}
+
+/** View and edit CRM client records. Same rule as canManageBookings — clients are booking-adjacent CRM data, reviewed/managed by the same roles. */
+export function canManageClients(role: AdminRole): boolean {
+  return role === "super_admin" || role === "manager";
+}
+
+/** Add/edit/remove availability & external-booking calendar blocks. */
+export function canManageAvailability(role: AdminRole): boolean {
+  return role === "super_admin" || role === "manager" || role === "editor";
+}
+
 export function roleLabel(role: AdminRole): string {
   switch (role) {
     case "super_admin":

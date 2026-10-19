@@ -27,26 +27,31 @@ const emptyItem: ReleaseItem = {
   streamingLinks: {},
 };
 
-export function MusicTab({ artistId, items }: { artistId: string; items: ReleaseItem[] }) {
+type SaveAction = (items: ReleaseItem[]) => Promise<{ error: string | null }>;
+
+export function MusicTab({ artistId, items, saveAction }: { artistId: string; items: ReleaseItem[]; saveAction?: SaveAction }) {
+  const onSave: SaveAction =
+    saveAction ??
+    ((all) =>
+      replaceReleasesAction(
+        artistId,
+        all.map((item) => ({
+          type: item.type,
+          title: item.title,
+          releaseDate: item.releaseDate,
+          coverImageMediaId: item.coverImageMediaId,
+          description: item.description,
+          trackCount: item.trackCount ?? undefined,
+          streamingLinks: item.streamingLinks,
+        }))
+      ));
+
   return (
     <RepeatableListEditor<ReleaseItem>
       items={items}
       emptyItem={emptyItem}
       itemLabel={(item) => item.title || "Untitled release"}
-      onSave={async (all) =>
-        replaceReleasesAction(
-          artistId,
-          all.map((item) => ({
-            type: item.type,
-            title: item.title,
-            releaseDate: item.releaseDate,
-            coverImageMediaId: item.coverImageMediaId,
-            description: item.description,
-            trackCount: item.trackCount ?? undefined,
-            streamingLinks: item.streamingLinks,
-          }))
-        )
-      }
+      onSave={onSave}
       renderItem={(item, update) => (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

@@ -32,11 +32,15 @@ export default async function AdminDashboardPage() {
         <p className="mt-1 text-sm text-[var(--admin-muted)]">An overview of applications and artists on the platform.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <StatCard label="Total Artists" value={counts.totalArtists} />
         <StatCard label="Published Artists" value={counts.publishedArtists} />
         <StatCard label="Draft Artists" value={counts.draftArtists} />
         <StatCard label="Pending Applications" value={counts.pendingApplications} />
+        <StatCard label="New Booking Requests" value={counts.newBookingRequests} />
+        <StatCard label="Confirmed Bookings" value={counts.confirmedBookings} />
+        <StatCard label="Total Clients" value={counts.totalClients} />
+        <StatCard label="Repeat Clients" value={counts.repeatClients} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

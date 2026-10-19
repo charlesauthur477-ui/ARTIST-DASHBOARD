@@ -16,24 +16,33 @@ export interface BandMemberItem {
 
 const emptyItem: BandMemberItem = { name: "", role: "", bio: "", instagram: "", photoMediaId: null, photoUrl: null };
 
-export function BandTab({ artistId, items }: { artistId: string; items: BandMemberItem[] }) {
+type SaveAction = (items: BandMemberItem[]) => Promise<{ error: string | null }>;
+
+// `saveAction` defaults to the admin Server Action (bound to `artistId`), so
+// every existing admin usage is unchanged. The Artist Portal passes its own
+// session-scoped action instead — see app/artist/band/page.tsx — reusing
+// this exact component/UI rather than duplicating it.
+export function BandTab({ artistId, items, saveAction }: { artistId: string; items: BandMemberItem[]; saveAction?: SaveAction }) {
+  const onSave: SaveAction =
+    saveAction ??
+    ((all) =>
+      replaceBandMembersAction(
+        artistId,
+        all.map((item) => ({
+          name: item.name,
+          role: item.role,
+          bio: item.bio,
+          instagram: item.instagram || null,
+          photoMediaId: item.photoMediaId,
+        }))
+      ));
+
   return (
     <RepeatableListEditor<BandMemberItem>
       items={items}
       emptyItem={emptyItem}
       itemLabel={(item) => item.name || "Untitled member"}
-      onSave={async (all) =>
-        replaceBandMembersAction(
-          artistId,
-          all.map((item) => ({
-            name: item.name,
-            role: item.role,
-            bio: item.bio,
-            instagram: item.instagram || null,
-            photoMediaId: item.photoMediaId,
-          }))
-        )
-      }
+      onSave={onSave}
       renderItem={(item, update) => (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

@@ -28,28 +28,33 @@ const emptyItem: ShowItem = {
   isPast: false,
 };
 
-export function ShowsTab({ artistId, items }: { artistId: string; items: ShowItem[] }) {
+type SaveAction = (items: ShowItem[]) => Promise<{ error: string | null }>;
+
+export function ShowsTab({ artistId, items, saveAction }: { artistId: string; items: ShowItem[]; saveAction?: SaveAction }) {
+  const onSave: SaveAction =
+    saveAction ??
+    ((all) =>
+      replaceShowsAction(
+        artistId,
+        all.map((item) => ({
+          date: item.date,
+          city: item.city,
+          venue: item.venue,
+          country: item.country,
+          eventType: item.eventType,
+          status: item.status,
+          ticketUrl: item.ticketUrl || null,
+          detailsUrl: item.detailsUrl || null,
+          isPast: item.isPast,
+        }))
+      ));
+
   return (
     <RepeatableListEditor<ShowItem>
       items={items}
       emptyItem={emptyItem}
       itemLabel={(item) => `${item.date || "TBD"} — ${item.venue || "Untitled show"}`}
-      onSave={async (all) =>
-        replaceShowsAction(
-          artistId,
-          all.map((item) => ({
-            date: item.date,
-            city: item.city,
-            venue: item.venue,
-            country: item.country,
-            eventType: item.eventType,
-            status: item.status,
-            ticketUrl: item.ticketUrl || null,
-            detailsUrl: item.detailsUrl || null,
-            isPast: item.isPast,
-          }))
-        )
-      }
+      onSave={onSave}
       renderItem={(item, update) => (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

@@ -17,6 +17,7 @@ import { CollaborationGrid } from "@/components/home/CollaborationGrid";
 import { TestimonialCard } from "@/components/home/TestimonialCard";
 import { InstagramFeed } from "@/components/home/InstagramFeed";
 import { bookingHref } from "@/lib/nav";
+import { safeJsonLd } from "@/lib/jsonLd";
 
 export async function generateStaticParams() {
   return (await getAllArtistSlugs()).map((slug) => ({ slug }));
@@ -80,7 +81,7 @@ export default async function ArtistHomePage({ params }: PageProps<"/artists/[sl
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
 
       <ArtistHero artist={artist} />
 

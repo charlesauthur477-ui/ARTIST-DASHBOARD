@@ -25,25 +25,30 @@ const emptyItem: VideoItem = {
   featured: false,
 };
 
-export function VideosTab({ artistId, items }: { artistId: string; items: VideoItem[] }) {
+type SaveAction = (items: VideoItem[]) => Promise<{ error: string | null }>;
+
+export function VideosTab({ artistId, items, saveAction }: { artistId: string; items: VideoItem[]; saveAction?: SaveAction }) {
+  const onSave: SaveAction =
+    saveAction ??
+    ((all) =>
+      replaceVideosAction(
+        artistId,
+        all.map((item) => ({
+          title: item.title,
+          description: item.description,
+          platform: item.platform,
+          videoId: item.videoId,
+          posterImageMediaId: item.posterImageMediaId,
+          featured: item.featured,
+        }))
+      ));
+
   return (
     <RepeatableListEditor<VideoItem>
       items={items}
       emptyItem={emptyItem}
       itemLabel={(item) => item.title || "Untitled video"}
-      onSave={async (all) =>
-        replaceVideosAction(
-          artistId,
-          all.map((item) => ({
-            title: item.title,
-            description: item.description,
-            platform: item.platform,
-            videoId: item.videoId,
-            posterImageMediaId: item.posterImageMediaId,
-            featured: item.featured,
-          }))
-        )
-      }
+      onSave={onSave}
       renderItem={(item, update) => (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

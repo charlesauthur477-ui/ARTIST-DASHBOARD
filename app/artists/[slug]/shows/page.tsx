@@ -6,6 +6,7 @@ import { ShowsList } from "@/components/shows/ShowsList";
 import { CTASection } from "@/components/ui/CTASection";
 import { Button } from "@/components/ui/Button";
 import { bookingHref } from "@/lib/nav";
+import { safeJsonLd } from "@/lib/jsonLd";
 
 export async function generateStaticParams() {
   return (await getAllArtistSlugs()).map((slug) => ({ slug }));
@@ -53,7 +54,7 @@ export default async function ShowsPage({ params }: PageProps<"/artists/[slug]/s
   return (
     <>
       {jsonLd.length > 0 ? (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       ) : null}
       <PageHero eyebrow="Live Dates" title="Shows" description={`Where to catch ${artist.name} live.`} />
 

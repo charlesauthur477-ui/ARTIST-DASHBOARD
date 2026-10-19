@@ -14,27 +14,32 @@ export interface PerformanceFormatItem {
 
 const emptyItem: PerformanceFormatItem = { formatId: "", name: "", lineup: "", style: "", suitableFor: "" };
 
-export function PerformanceTab({ artistId, items }: { artistId: string; items: PerformanceFormatItem[] }) {
+type SaveAction = (items: PerformanceFormatItem[]) => Promise<{ error: string | null }>;
+
+export function PerformanceTab({ artistId, items, saveAction }: { artistId: string; items: PerformanceFormatItem[]; saveAction?: SaveAction }) {
+  const onSave: SaveAction =
+    saveAction ??
+    ((all) =>
+      replacePerformanceFormatsAction(
+        artistId,
+        all.map((item) => ({
+          formatId: item.formatId,
+          name: item.name,
+          lineup: item.lineup,
+          style: item.style,
+          suitableFor: item.suitableFor
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }))
+      ));
+
   return (
     <RepeatableListEditor<PerformanceFormatItem>
       items={items}
       emptyItem={emptyItem}
       itemLabel={(item) => item.name || "Untitled format"}
-      onSave={async (all) =>
-        replacePerformanceFormatsAction(
-          artistId,
-          all.map((item) => ({
-            formatId: item.formatId,
-            name: item.name,
-            lineup: item.lineup,
-            style: item.style,
-            suitableFor: item.suitableFor
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          }))
-        )
-      }
+      onSave={onSave}
       renderItem={(item, update) => (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

@@ -94,7 +94,9 @@ export async function rejectApplicationAction(formData: FormData): Promise<void>
   const record = await getApplicationById(applicationId);
   if (!record) throw new Error("Application not found.");
 
-  await rejectApplication(applicationId, reason, user.id);
+  const result = await rejectApplication(applicationId, reason, user.id);
+  if (!result.success) throw new Error(result.error ?? "Could not reject application.");
+
   await logActivity({
     actorAdminUserId: user.id,
     action: "application.rejected",

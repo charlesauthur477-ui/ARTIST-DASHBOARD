@@ -111,7 +111,7 @@ export interface ArtistProfilePatch {
   ogImageMediaId?: string | null;
 }
 
-export async function updateArtistProfile(artistId: string, patch: ArtistProfilePatch, updatedBy: string): Promise<void> {
+export async function updateArtistProfile(artistId: string, patch: ArtistProfilePatch, updatedBy: string | null): Promise<void> {
   const db = getDb();
   await db
     .update(schema.artists)

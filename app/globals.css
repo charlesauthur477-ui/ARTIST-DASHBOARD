@@ -120,5 +120,36 @@ body {
   background: var(--admin-bg);
   color: var(--admin-text);
   font-family: var(--font-sans), system-ui, sans-serif;
-  min-height: 100%;
+
+  /* Global black-lower-half fix (Booking Ops follow-up):
+   *
+   * This rule and Tailwind's `min-h-screen` utility (`min-height: 100vh`,
+   * applied alongside this class on AdminShell's and ArtistShell's root
+   * div — `className="admin-shell flex min-h-screen"`) both target
+   * `min-height` on the same element. Tailwind v4 emits its utilities
+   * inside `@layer utilities`, while this rule — plain CSS written
+   * directly in this file — is UNLAYERED. Per the CSS Cascade Layers
+   * spec, an unlayered declaration always wins over a layered one for the
+   * same property, regardless of selector specificity or source order —
+   * so this rule's `min-height` always overrode `min-h-screen`'s,
+   * completely silently.
+   *
+   * The old value here was `100%`, which needs a definite height on every
+   * ancestor up to the one it resolves against to mean anything. `body`
+   * only ever gets a `min-height` of its own (Tailwind's `min-h-full`),
+   * never an explicit `height` — so `100%` here resolved to nothing
+   * (effectively `auto`), and `.admin-shell` shrank to fit its own content
+   * instead of filling the viewport. On any page shorter than the
+   * viewport, `body`'s own background (`--background`, the dark public-
+   * site theme — see the `body { background }` rule above) showed through
+   * in the gap below it, which is the large black region reported here.
+   *
+   * `100dvh` (with a `100vh` fallback for older browsers) is viewport-
+   * relative, not ancestor-relative, so it doesn't depend on any of that
+   * and reliably fills at least the full viewport on every route that
+   * uses this class — both /admin/* (AdminShell) and /artist/*
+   * (ArtistShell, which intentionally reuses this exact class/token set).
+   */
+  min-height: 100vh;
+  min-height: 100dvh;
 }

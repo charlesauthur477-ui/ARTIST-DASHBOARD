@@ -10,10 +10,13 @@ import { getDb, schema } from "@/lib/db";
 // ---------------------------------------------------------------------------
 
 export type ActivityAction =
+  | "application.submitted"
   | "application.reviewed"
   | "application.approved"
   | "application.rejected"
   | "application.returned_to_review"
+  | "application.notified"
+  | "application.notification_failed"
   | "artist.created"
   | "artist.updated"
   | "artist.published"
@@ -25,7 +28,26 @@ export type ActivityAction =
   | "media.reordered"
   | "admin.signed_in"
   | "admin.created"
-  | "admin.deactivated";
+  | "admin.deactivated"
+  | "admin.activated"
+  | "admin.role_changed"
+  | "admin.password_reset"
+  | "booking.created"
+  | "booking.status_changed"
+  | "booking.notified"
+  | "booking.notification_failed"
+  | "availability.added"
+  | "availability.updated"
+  | "availability.removed"
+  | "artist.portal_signed_in"
+  | "artist.portal_access_created"
+  | "artist.portal_access_updated"
+  | "artist.portal_access_emailed"
+  | "artist.portal_access_email_failed"
+  | "artist.password_reset_requested"
+  | "artist.password_reset_completed"
+  | "client.created"
+  | "client.updated";
 
 export interface LogActivityInput {
   actorAdminUserId: string | null;
@@ -52,6 +74,27 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
     // log and move on.
     console.error("[activity] failed to record activity log entry", input.action, err);
   }
+}
+
+export async function listActivityForEntity(entityType: string, entityId: string, limit = 20) {
+  const db = getDb();
+  const { and, desc, eq } = await import("drizzle-orm");
+  const rows = await db
+    .select({
+      id: schema.activityLog.id,
+      action: schema.activityLog.action,
+      summary: schema.activityLog.summary,
+      metadata: schema.activityLog.metadata,
+      createdAt: schema.activityLog.createdAt,
+      actorName: schema.users.name,
+      actorEmail: schema.users.email,
+    })
+    .from(schema.activityLog)
+    .leftJoin(schema.users, eq(schema.activityLog.actorAdminUserId, schema.users.id))
+    .where(and(eq(schema.activityLog.entityType, entityType), eq(schema.activityLog.entityId, entityId)))
+    .orderBy(desc(schema.activityLog.createdAt))
+    .limit(limit);
+  return rows;
 }
 
 export async function listRecentActivity(limit = 20) {

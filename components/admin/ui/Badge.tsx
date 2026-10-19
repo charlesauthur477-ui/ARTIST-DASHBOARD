@@ -40,3 +40,29 @@ const ARTIST_STATUS_TONE: Record<string, Tone> = {
 export function ArtistStatusBadge({ status }: { status: string }) {
   return <Badge tone={ARTIST_STATUS_TONE[status] ?? "neutral"}>{status}</Badge>;
 }
+
+const BOOKING_STATUS_TONE: Record<string, Tone> = {
+  new: "info",
+  contacted: "neutral",
+  negotiating: "warning",
+  confirmed: "success",
+  completed: "neutral",
+  rejected: "danger",
+  cancelled: "danger",
+};
+
+export function BookingStatusBadge({ status }: { status: string }) {
+  return <Badge tone={BOOKING_STATUS_TONE[status] ?? "neutral"}>{status}</Badge>;
+}
+
+const CALENDAR_EVENT_TONE: Record<string, Tone> = {
+  available: "success",
+  tentative: "warning",
+  booked_platform: "info",
+  booked_external: "danger",
+  unavailable: "danger",
+};
+
+export function CalendarEventBadge({ type }: { type: string }) {
+  return <Badge tone={CALENDAR_EVENT_TONE[type] ?? "neutral"}>{type.replace(/_/g, " ")}</Badge>;
+}

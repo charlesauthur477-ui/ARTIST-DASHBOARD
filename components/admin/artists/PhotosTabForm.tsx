@@ -18,16 +18,21 @@ const SLOTS: Slot[] = [
   { key: "ogImageMediaId", role: "og_image", label: "Social share (OG) image" },
 ];
 
+type SaveAction = (patch: Partial<Record<Slot["key"], string | null>>) => Promise<{ error: string | null }>;
+
 export function PhotosTabForm({
   artistId,
   initial,
+  saveAction,
 }: {
   artistId: string;
   initial: Record<Slot["key"], { mediaId: string | null; url: string | null }>;
+  saveAction?: SaveAction;
 }) {
   const [images, setImages] = useState(initial);
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const onSave: SaveAction = saveAction ?? ((patch) => updateArtistProfileAction(artistId, patch));
 
   function handleChange(key: Slot["key"], mediaId: string | null, url: string | null) {
     setImages((prev) => ({ ...prev, [key]: { mediaId, url } }));
@@ -35,7 +40,7 @@ export function PhotosTabForm({
     startTransition(async () => {
       const patch: Partial<Record<Slot["key"], string | null>> = {};
       patch[key] = mediaId;
-      const result = await updateArtistProfileAction(artistId, patch);
+      const result = await onSave(patch);
       if (result.error) setError(result.error);
     });
   }

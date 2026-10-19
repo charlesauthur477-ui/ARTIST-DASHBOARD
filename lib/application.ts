@@ -3,6 +3,8 @@
 import type { ApplicationSubmissionResult, ArtistApplication } from "@/types/application";
 import { validateArtistApplication } from "@/lib/validation/application";
 import { createDraftApplication as createDraftApplicationRow, persistApplicationSubmission } from "@/lib/repositories/applications";
+import { logActivity } from "@/lib/admin/activity";
+import { notifyNewApplication } from "@/lib/email/applicationNotifications";
 
 /**
  * createDraftApplication — called once when the onboarding wizard mounts
@@ -65,6 +67,26 @@ export async function submitArtistApplication(
     hasProfilePhoto: Boolean(data.profilePhoto),
     hasHeroPhoto: Boolean(data.heroPhoto),
     additionalPhotos: data.additionalPhotos.length,
+  });
+
+  await logActivity({
+    actorAdminUserId: null,
+    action: "application.submitted",
+    entityType: "application",
+    entityId: applicationId,
+    summary: `${data.stageName} submitted a new artist application.`,
+    metadata: { contactEmail: data.preferredContactEmail },
+  });
+
+  // Best-effort notification — never throws, never blocks/undoes the
+  // submission already committed above. See lib/email/applicationNotifications.ts.
+  await notifyNewApplication({
+    applicationId,
+    stageName: data.stageName,
+    contactEmail: data.preferredContactEmail,
+    city: data.city,
+    country: data.country,
+    primaryGenre: data.primaryGenre,
   });
 
   return {

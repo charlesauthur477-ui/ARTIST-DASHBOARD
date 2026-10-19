@@ -14,6 +14,7 @@
 
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -21,6 +22,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -56,6 +58,67 @@ export const releaseTypeEnum = pgEnum("release_type", ["album", "ep", "single"])
 // Phase 4 — admin dashboard. See PHASE_4_PLAN.md Section 10 for the full
 // rationale; every change below is additive to the Phase 3 schema.
 export const adminRoleEnum = pgEnum("admin_role", ["super_admin", "manager", "editor"]);
+
+// RAPID BUILD MODE — Sprint 3/4: a real booking CRM plus a unified
+// availability/calendar architecture. Both are additive; nothing above this
+// point is touched.
+export const bookingStatusEnum = pgEnum("booking_status", [
+  "new",
+  "contacted",
+  "negotiating",
+  "confirmed",
+  "completed",
+  "rejected",
+  "cancelled",
+]);
+
+// One unified event type for the whole calendar: platform-confirmed
+// bookings, admin-entered external bookings, and manually-set
+// tentative/unavailable blocks all live in the same table so a single query
+// (see lib/repositories/calendar.ts) can answer "is this artist free on
+// this date" regardless of which of those a given block came from.
+export const calendarEventTypeEnum = pgEnum("calendar_event_type", [
+  "available",
+  "tentative",
+  "booked_platform",
+  "booked_external",
+  "unavailable",
+]);
+
+// Calendar Integration Phase 1 — WHERE a calendar_event came from, kept
+// separate from `type` above (which answers "does this block the public
+// booking form"). "manual" covers every existing row (admin/artist-entered
+// blocks and system-generated booked_platform rows from a confirmed
+// booking) — the new sources are purely additive. See
+// lib/calendarIntegration/sync.ts for how google_calendar/apple_ics rows
+// get created and cleaned up.
+export const calendarEventSourceEnum = pgEnum("calendar_event_source", [
+  "manual",
+  "google_calendar",
+  "apple_ics",
+]);
+
+// Calendar Integration Phase 1 — one row per (artist, provider) external
+// calendar connection. Deliberately its OWN table rather than columns on
+// `artists`/`artist_users`: an artist may eventually connect more than one
+// provider, credentials have a very different lifecycle (expire, get
+// revoked, get rotated) from profile data, and keeping OAuth tokens out of
+// the wide `artists`/`artist_users` tables means no code path that reads a
+// profile for display ever accidentally touches a token column.
+export const calendarConnectionProviderEnum = pgEnum("calendar_connection_provider", ["google", "apple_ics"]);
+
+export const calendarConnectionStatusEnum = pgEnum("calendar_connection_status", [
+  "connected",
+  "disconnected",
+  "error",
+]);
+
+// "busy_only" (default) is the ONLY mode Phase 1 actually implements — see
+// lib/calendarIntegration/sync.ts, which only ever stores a fixed "Busy"
+// title, never the source event's real title. "detailed" is stored so the
+// column/preference exists for a future phase, but nothing reads it yet;
+// the UI labels it "planned".
+export const calendarPrivacyModeEnum = pgEnum("calendar_privacy_mode", ["busy_only", "detailed"]);
 
 // ---------------------------------------------------------------------------
 // artist_applications + children
@@ -431,6 +494,230 @@ export const testimonials = pgTable("testimonials", {
   eventType: text("event_type").notNull().default(""),
   sortOrder: integer("sort_order").notNull().default(0),
 });
+
+// ---------------------------------------------------------------------------
+// artist_users — Sprint 5: artist-side login, completely separate from the
+// admin_users/Auth.js DrizzleAdapter tables above. Exactly one artist_user
+// row per artist (artist_id is unique) — "an artist account must belong to
+// exactly one artist profile". Session handling for this table lives in
+// lib/artist/session.ts and does NOT touch the NextAuth() config in
+// auth.ts at all, so the existing admin authentication is untouched by
+// this addition (see that file's doc comment for the mechanism: a
+// separately-signed, separately-named cookie using next-auth/jwt's
+// encode/decode helpers directly, keyed by its own cookie-name salt).
+// ---------------------------------------------------------------------------
+
+export const artistUsers = pgTable("artist_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  artistId: uuid("artist_id")
+    .notNull()
+    .unique()
+    .references(() => artists.id, { onDelete: "cascade" }),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  // Calendar Integration Phase 1 — the secret path segment for this
+  // artist's outbound "Wavelength Calendar" ICS subscription feed
+  // (app/api/calendar/[token]/route.ts). Unguessable by design (a random
+  // uuid, same defaultRandom() convention as every other id in this
+  // schema) rather than derived from the artist's own id, so the feed URL
+  // itself is the only thing that has to stay secret — no session/login
+  // required to subscribe from a phone's calendar app. Regeneratable via
+  // artistRegenerateCalendarFeedTokenAction if it ever leaks.
+  calendarFeedToken: uuid("calendar_feed_token").notNull().defaultRandom().unique(),
+  // Self-service "forgot password" — 3-day sprint, item 3. Only a SHA-256
+  // hash of the raw reset token is ever stored (same reasoning as never
+  // storing a plaintext/reversible password): if this table leaked, the
+  // hash alone can't be used to reset anyone's password. The raw token
+  // only ever exists in the emailed link and briefly in memory server-side
+  // while verifying it. Single-use is enforced by clearing both columns
+  // the moment a reset succeeds; expiry is enforced by
+  // passwordResetExpiresAt, checked on every verification attempt.
+  passwordResetTokenHash: text("password_reset_token_hash"),
+  passwordResetExpiresAt: timestamp("password_reset_expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// bookings — real booking requests submitted via the public "Book This
+// Artist" form (lib/booking.ts#submitBookingInquiry). Field set mirrors
+// BookingInquiryInput (types/booking.ts) exactly so no public-form redesign
+// is required to persist every field it already collects.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// clients — CRM Phase 1. A lightweight contact record a booking can
+// optionally be linked to, so the same person's multiple booking requests
+// can be seen together. Deliberately NOT a user/login table (clients never
+// sign in — see lib/repositories/artistUsers.ts for the actual portal-login
+// concept, which this is unrelated to) and deliberately NOT a hard-unique
+// email (a shared/company inbox can legitimately submit as multiple
+// distinct clients, or one client's booking could come from a colleague's
+// address — findOrCreateClientByEmail treats email as a soft matching key,
+// not an identity constraint the database enforces).
+//
+// `bookings.clientId` (below) is nullable and ON DELETE SET NULL by design:
+// a booking's own clientName/email/phone/company columns remain the
+// authoritative historical snapshot of what was submitted at booking time,
+// regardless of what happens to the linked client record later.
+// ---------------------------------------------------------------------------
+export const clients = pgTable(
+  "clients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().default(""),
+    email: text("email").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    company: text("company").notNull().default(""),
+    location: text("location").notNull().default(""),
+    source: text("source").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Non-unique — supports both the findOrCreateClientByEmail lookup and
+    // the admin client-search query. Not a uniqueIndex: see comment above.
+    index("clients_email_idx").on(table.email),
+    index("clients_name_idx").on(table.name),
+  ]
+);
+
+export const bookings = pgTable(
+  "bookings",
+  {
+  id: uuid("id").primaryKey().defaultRandom(),
+  artistId: uuid("artist_id")
+    .notNull()
+    .references(() => artists.id, { onDelete: "cascade" }),
+  status: bookingStatusEnum("status").notNull().default("new"),
+
+  // CRM Phase 1: optional link to the clients table. Nullable and
+  // ON DELETE SET NULL — losing the client record (or a booking simply
+  // predating CRM Phase 1, see CRM_BACKFILL.md) must never delete or corrupt
+  // the booking itself. The snapshot fields below (clientName/email/phone/
+  // company) are NOT replaced by this relationship and remain how the
+  // booking looked at the moment it was submitted.
+  clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+
+  clientName: text("client_name").notNull().default(""),
+  company: text("company").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  eventType: text("event_type").notNull().default(""),
+  eventDate: text("event_date").notNull().default(""),
+  location: text("location").notNull().default(""),
+  expectedAudience: text("expected_audience").notNull().default(""),
+  performanceFormat: text("performance_format").notNull().default(""),
+  budgetRange: text("budget_range").notNull().default(""),
+  message: text("message").notNull().default(""),
+
+  internalNotes: text("internal_notes").notNull().default(""),
+  reviewedBy: uuid("reviewed_by").references(() => adminUsers.id),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("bookings_client_id_idx").on(table.clientId)]
+);
+
+// ---------------------------------------------------------------------------
+// artist_calendar_events — the unified availability/calendar architecture
+// (RAPID BUILD MODE Sprint 4). Every kind of date block for an artist —
+// a confirmed platform booking, an admin-entered external booking, or a
+// manual tentative/unavailable mark — is one row here, so availability
+// checks and calendar rendering never need to reconcile multiple sources.
+// `bookingId` links a row back to the `bookings` record that generated it
+// (set only for type = 'booked_platform'); external/manual blocks leave it
+// null.
+// ---------------------------------------------------------------------------
+
+export const artistCalendarEvents = pgTable("artist_calendar_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  artistId: uuid("artist_id")
+    .notNull()
+    .references(() => artists.id, { onDelete: "cascade" }),
+  type: calendarEventTypeEnum("type").notNull().default("unavailable"),
+  title: text("title").notNull().default(""),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }).notNull(),
+  venue: text("venue").notNull().default(""),
+  city: text("city").notNull().default(""),
+  country: text("country").notNull().default(""),
+  eventType: text("event_type").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "set null" }),
+  createdByAdminUserId: uuid("created_by_admin_user_id").references(() => adminUsers.id),
+  // Sprint 5: set only when an artist (not an admin) created this block via
+  // the Artist Portal's Availability page — lets us tell "this artist's own
+  // manual block, which they may edit/delete" apart from an admin-entered
+  // block or a system-generated one (bookingId set), which they may not.
+  createdByArtistUserId: uuid("created_by_artist_user_id").references(() => artistUsers.id, { onDelete: "set null" }),
+  // Calendar Integration Phase 1 — additive. `source` defaults to "manual"
+  // so every existing row keeps its current meaning unchanged.
+  // externalConnectionId/externalEventUid are only set on rows synced from
+  // an external calendar (source != "manual"): externalConnectionId is what
+  // lets a re-sync or a disconnect find and remove exactly the rows it
+  // owns (`onDelete: "set null"` rather than cascade — deleting a
+  // connection should not silently orphan-delete calendar rows outside
+  // the explicit cleanup path in lib/calendarIntegration/sync.ts, which
+  // always deletes-then-reinserts by connection id itself before a row
+  // could ever be left dangling). externalEventUid is a synthesized dedup
+  // key (see sync.ts) — busy-only freebusy data has no provider event id.
+  source: calendarEventSourceEnum("source").notNull().default("manual"),
+  externalConnectionId: uuid("external_connection_id").references(() => calendarConnections.id, { onDelete: "set null" }),
+  externalEventUid: text("external_event_uid"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// calendar_connections — Calendar Integration Phase 1.
+//
+// One row per (artist, provider). OAuth tokens (Google) are stored
+// encrypted at rest (lib/calendarIntegration/tokenCrypto.ts, AES-256-GCM
+// keyed from AUTH_SECRET) and are only ever decrypted server-side inside
+// lib/calendarIntegration/*  — no Server Action or page ever returns these
+// columns to a client component. For Apple/iCloud there is no OAuth today;
+// `icsSubscriptionUrl` holds the artist-supplied ICS subscription link
+// instead, and the same sync path fetches+parses it server-side.
+// ---------------------------------------------------------------------------
+export const calendarConnections = pgTable(
+  "calendar_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    artistId: uuid("artist_id")
+      .notNull()
+      .references(() => artists.id, { onDelete: "cascade" }),
+    provider: calendarConnectionProviderEnum("provider").notNull(),
+    status: calendarConnectionStatusEnum("status").notNull().default("disconnected"),
+
+    // Google OAuth — encrypted at rest, server-only, never sent to the client.
+    accessTokenEnc: text("access_token_enc"),
+    refreshTokenEnc: text("refresh_token_enc"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    scope: text("scope"),
+    externalAccountEmail: text("external_account_email"), // display only (e.g. "connected as name@gmail.com") — never an event title
+    externalCalendarId: text("external_calendar_id"), // which of the artist's Google calendars to read, if they have more than one
+    externalCalendarLabel: text("external_calendar_label"), // that calendar's display name, for the picker UI
+
+    // Apple/iCloud (ICS subscription import) — Phase 1's supported path for
+    // this provider; see CALENDAR_INTEGRATION.md for why direct Apple OAuth
+    // isn't practical for a web app.
+    icsSubscriptionUrl: text("ics_subscription_url"),
+
+    privacyMode: calendarPrivacyModeEnum("privacy_mode").notNull().default("busy_only"),
+
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastSyncStatus: text("last_sync_status").notNull().default("never"), // "never" | "success" | "error"
+    lastSyncError: text("last_sync_error"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("calendar_connections_artist_provider_idx").on(table.artistId, table.provider)]
+);
 
 // ---------------------------------------------------------------------------
 // media — shared by artist_applications and artists (Section 3/6)

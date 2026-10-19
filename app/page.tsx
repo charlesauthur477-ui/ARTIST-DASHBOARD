@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { getAllArtists } from "@/lib/artists";
+import { safeJsonLd } from "@/lib/jsonLd";
 import { platform } from "@/data/platform";
 import { Reveal } from "@/components/ui/Reveal";
 
@@ -25,7 +26,7 @@ export default async function PlatformHomePage() {
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6 sm:px-6">
         <span className="font-display text-lg tracking-wide">{platform.name}</span>
         <a href={`mailto:${platform.contactEmail}`} className="text-sm text-foreground/75 hover:text-bronze-300">

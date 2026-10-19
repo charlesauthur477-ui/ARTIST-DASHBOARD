@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
+import { getClientDashboardStats } from "@/lib/repositories/clients";
 
 // ---------------------------------------------------------------------------
 // Admin dashboard home queries — PHASE_4_PLAN.md Section 4.
@@ -16,16 +17,27 @@ export interface DashboardCounts {
   publishedArtists: number;
   draftArtists: number;
   pendingApplications: number;
+  newBookingRequests: number;
+  confirmedBookings: number;
+  totalClients: number;
+  repeatClients: number;
 }
 
 export async function getDashboardCounts(): Promise<DashboardCounts> {
   const db = getDb();
-  const [artistRows, pendingRows] = await Promise.all([
+  const [artistRows, pendingRows, bookingRows, clientStats] = await Promise.all([
     db.select({ status: schema.artists.status }).from(schema.artists),
     db
       .select({ id: schema.artistApplications.id })
       .from(schema.artistApplications)
       .where(inArray(schema.artistApplications.status, ["submitted", "under_review"])),
+    db.select({ status: schema.bookings.status }).from(schema.bookings),
+    // CRM Phase 1: single grouped-aggregate query (see
+    // lib/repositories/clients.ts#getClientDashboardStats), not a
+    // fetch-everything-and-count-in-JS pass like the three queries above —
+    // deliberately kept cheap per the sprint's "don't make the dashboard
+    // query unnecessarily expensive" instruction.
+    getClientDashboardStats(),
   ]);
 
   return {
@@ -33,6 +45,10 @@ export async function getDashboardCounts(): Promise<DashboardCounts> {
     publishedArtists: artistRows.filter((r) => r.status === "active").length,
     draftArtists: artistRows.filter((r) => r.status === "draft").length,
     pendingApplications: pendingRows.length,
+    newBookingRequests: bookingRows.filter((r) => r.status === "new").length,
+    confirmedBookings: bookingRows.filter((r) => r.status === "confirmed").length,
+    totalClients: clientStats.totalClients,
+    repeatClients: clientStats.repeatClients,
   };
 }
 

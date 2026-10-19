@@ -14,7 +14,17 @@ export interface GalleryItem {
 
 const emptyItem: GalleryItem = { mediaId: null, url: null, alt: "", category: "live" };
 
-export function GalleryTab({ artistId, items }: { artistId: string; items: GalleryItem[] }) {
+type SaveAction = (items: GalleryItem[]) => Promise<{ error: string | null }>;
+
+export function GalleryTab({ artistId, items, saveAction }: { artistId: string; items: GalleryItem[]; saveAction?: SaveAction }) {
+  const onSave: SaveAction =
+    saveAction ??
+    ((all) =>
+      replaceGalleryAction(
+        artistId,
+        all.filter((item) => item.mediaId).map((item) => ({ mediaId: item.mediaId as string, alt: item.alt, category: item.category }))
+      ));
+
   return (
     <div>
       <h2 className="mb-3 text-base font-semibold">Gallery</h2>
@@ -22,12 +32,7 @@ export function GalleryTab({ artistId, items }: { artistId: string; items: Galle
         items={items}
         emptyItem={emptyItem}
         itemLabel={(item) => item.alt || "Untitled photo"}
-        onSave={async (all) =>
-          replaceGalleryAction(
-            artistId,
-            all.filter((item) => item.mediaId).map((item) => ({ mediaId: item.mediaId as string, alt: item.alt, category: item.category }))
-          )
-        }
+        onSave={onSave}
         renderItem={(item, update) => (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>

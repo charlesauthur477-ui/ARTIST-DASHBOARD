@@ -2,6 +2,11 @@
 
 import type { BookingFieldErrors, BookingInquiryInput, BookingSubmissionResult } from "@/types/booking";
 import { getArtistBySlug } from "@/lib/artists";
+import { createBooking } from "@/lib/repositories/bookings";
+import { isArtistAvailableOn } from "@/lib/repositories/calendar";
+import { logActivity } from "@/lib/admin/activity";
+import { notifyNewBooking } from "@/lib/email/bookingNotifications";
+import { findOrCreateClientByEmail } from "@/lib/repositories/clients";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -45,11 +50,11 @@ function validate(input: BookingInquiryInput): BookingFieldErrors {
 /**
  * submitBookingInquiry — the single entry point the booking form calls.
  *
- * V1: validates input server-side and simulates a successful submission
- * (no external system is called). The abstraction is deliberate: replacing
- * the body of this function with `await fetch("/api/bookings", ...)` or a
- * direct database write is the only change needed to wire this up to a real
- * booking CRM in a future phase — no component or page needs to change.
+ * RAPID BUILD MODE Sprint 3: validates input server-side, checks the
+ * artist's unified availability calendar (lib/repositories/calendar.ts) for
+ * the requested date, and — if free — persists a real `bookings` row
+ * (lib/repositories/bookings.ts) rather than discarding the submission.
+ * Admins manage it from /admin/bookings from that point on.
  */
 export async function submitBookingInquiry(
   input: BookingInquiryInput
@@ -70,14 +75,67 @@ export async function submitBookingInquiry(
     return { success: false, message: "Please correct the highlighted fields.", errors };
   }
 
-  // Simulate network latency for a realistic loading state in the UI.
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  const available = await isArtistAvailableOn(artist.id, input.eventDate);
+  if (!available) {
+    return {
+      success: false,
+      message: `${artist.name} is already booked or unavailable on that date. Please choose a different date.`,
+      errors: { eventDate: "Not available on this date." },
+    };
+  }
 
-  const referenceId = `BK-${Date.now().toString(36).toUpperCase()}`;
+  // CRM Phase 1: resolve (or create) a client record for this enquiry
+  // before writing the booking, so the booking can be inserted with its
+  // clientId already set in one shot — never a separate follow-up write
+  // that could leave a booking linked-then-unlinked, or vice versa. This is
+  // best-effort like the notification/activity calls below it: a failure
+  // here must never block or corrupt the booking itself, so any error just
+  // means the booking is created with no client link (clientId stays null),
+  // same as it always could before this sprint.
+  let clientId: string | null = null;
+  try {
+    const client = await findOrCreateClientByEmail(input.email, {
+      name: input.fullName,
+      phone: input.phone,
+      company: input.organization,
+    });
+    clientId = client.id;
+  } catch (err) {
+    console.error("[booking] failed to resolve/create client record — continuing without a client link", err);
+  }
+
+  const booking = await createBooking(artist.id, input, clientId);
+
+  await logActivity({
+    actorAdminUserId: null,
+    action: "booking.created",
+    entityType: "booking",
+    entityId: booking.id,
+    summary: `New booking enquiry from ${input.fullName} for ${artist.name} (${input.eventDate}).`,
+    metadata: { artistId: artist.id, eventDate: input.eventDate, eventType: input.eventType },
+  });
+
+  // Best-effort notification — never throws, never blocks/undoes the
+  // booking already committed above. See lib/email/bookingNotifications.ts.
+  await notifyNewBooking({
+    bookingId: booking.id,
+    artistName: artist.name,
+    clientName: input.fullName,
+    company: input.organization,
+    email: input.email,
+    phone: input.phone,
+    eventType: input.eventType,
+    eventDate: input.eventDate,
+    location: input.location,
+    expectedAudience: input.expectedAudience,
+    performanceFormat: input.performanceFormat,
+    budgetRange: input.budgetRange,
+    message: input.message,
+  });
 
   return {
     success: true,
     message: `Thank you, ${input.fullName.split(" ")[0]}. Your enquiry for ${artist.name} has been received — the team typically responds within 1–2 business days.`,
-    referenceId,
+    referenceId: booking.id,
   };
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { clsx } from "clsx";
-import { Menu, X, LayoutDashboard, Inbox, Users, ImageIcon, Activity, LogOut } from "lucide-react";
+import { Menu, X, LayoutDashboard, Inbox, Users, ImageIcon, Activity, LogOut, CalendarCheck, ShieldCheck, Contact2 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/permissions";
 import { roleLabel } from "@/lib/admin/permissions";
 import { logoutAction } from "@/app/admin/actions";
@@ -13,20 +13,25 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/applications", label: "Applications", icon: Inbox },
   { href: "/admin/artists", label: "Artists", icon: Users },
+  { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
+  { href: "/admin/clients", label: "Clients", icon: Contact2 },
   { href: "/admin/media", label: "Media", icon: ImageIcon },
   { href: "/admin/activity", label: "Activity", icon: Activity },
 ];
+
+const SUPER_ADMIN_ONLY_NAV_ITEM: (typeof NAV_ITEMS)[number] = { href: "/admin/admins", label: "Admin Users", icon: ShieldCheck };
 
 function isActivePath(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function SidebarLinks({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarLinks({ role, onNavigate }: { role: AdminRole; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const items = role === "super_admin" ? [...NAV_ITEMS, SUPER_ADMIN_ONLY_NAV_ITEM] : NAV_ITEMS;
   return (
     <nav className="flex flex-1 flex-col gap-1 px-3">
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         const active = isActivePath(pathname, item.href, item.exact);
         return (
@@ -62,13 +67,13 @@ export function AdminShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="admin-shell flex min-h-screen">
+    <div className="admin-shell flex">
       {/* Desktop sidebar (fixed, ~1280px+) */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--admin-border)] bg-[var(--admin-surface)] py-5 lg:flex">
         <div className="mb-6 px-4">
           <p className="text-base font-semibold">Wavelength Admin</p>
         </div>
-        <SidebarLinks />
+        <SidebarLinks role={role} />
         <div className="mt-auto border-t border-[var(--admin-border)] px-4 pt-4">
           <p className="truncate text-sm font-medium">{userName}</p>
           <p className="truncate text-xs text-[var(--admin-muted)]">{userEmail}</p>
@@ -101,7 +106,7 @@ export function AdminShell({
                   <X size={20} />
                 </button>
               </div>
-              <SidebarLinks onNavigate={() => setMobileOpen(false)} />
+              <SidebarLinks role={role} onNavigate={() => setMobileOpen(false)} />
               <div className="mt-auto border-t border-[var(--admin-border)] px-4 pt-4">
                 <p className="truncate text-sm font-medium">{userName}</p>
                 <p className="mt-0.5 text-xs text-[var(--admin-muted)]">{roleLabel(role)}</p>
