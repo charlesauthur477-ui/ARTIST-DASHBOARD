@@ -110,7 +110,10 @@ export default async function proxy(req: NextRequest) {
 
   const isLoginPage = pathname === "/admin/login";
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  const isSecure = req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+  const token =
+    (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: isSecure })) ??
+    (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: false }));
   const isSignedIn = Boolean(token);
 
   if (isLoginPage) {

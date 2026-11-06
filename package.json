@@ -12,6 +12,7 @@
     "db:seed": "tsx --env-file=.env.local scripts/seed_demo_artists.ts",
     "db:verify": "tsx --env-file=.env.local scripts/verify_phase3.ts",
     "admin:create": "tsx --env-file=.env.local scripts/create_admin_user.ts",
+    "admin:reset-password": "tsx --env-file=.env.local scripts/reset_admin_password.ts",
     "db:inspect-reviewed-by": "tsx --env-file=.env.local scripts/inspect_reviewed_by.ts"
   },
   "dependencies": {
