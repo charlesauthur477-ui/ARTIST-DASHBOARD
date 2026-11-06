@@ -40,6 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const db = getDb();
 
   return {
+    trustHost: true,
     adapter: DrizzleAdapter(db, {
       usersTable: schema.users,
       accountsTable: schema.accounts,

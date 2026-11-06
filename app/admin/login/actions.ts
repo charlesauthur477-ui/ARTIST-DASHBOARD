@@ -38,8 +38,10 @@ export async function loginAction(_prevState: LoginActionState, formData: FormDa
     await signIn("credentials", { email, password, redirect: false });
   } catch (err) {
     if (err instanceof AuthError) {
+      console.error("[auth] signIn AuthError:", err.type, err.message);
       return { error: "Invalid email or password." };
     }
+    console.error("[auth] signIn unexpected error:", err);
     throw err;
   }
 
