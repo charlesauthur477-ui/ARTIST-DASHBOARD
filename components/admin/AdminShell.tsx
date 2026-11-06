@@ -89,9 +89,8 @@ export function AdminShell({
         </div>
       </aside>
 
-      {/* Mobile/tablet: top bar + slide-over drawer */}
-      <div className="flex flex-1 flex-col lg:hidden">
-        <header className="flex items-center justify-between border-b border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
+      <div className="flex flex-1 flex-col min-w-0">
+        <header className="flex items-center justify-between border-b border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 lg:hidden">
           <p className="text-base font-semibold">Wavelength Admin</p>
           <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu size={22} />
@@ -125,11 +124,8 @@ export function AdminShell({
             />
           </div>
         ) : null}
-        <main className="flex-1 overflow-x-auto p-4">{children}</main>
+        <main className="flex-1 overflow-x-auto p-4 lg:p-8">{children}</main>
       </div>
-
-      {/* Desktop content area */}
-      <main className="hidden flex-1 overflow-x-auto p-8 lg:block">{children}</main>
     </div>
   );
 }
