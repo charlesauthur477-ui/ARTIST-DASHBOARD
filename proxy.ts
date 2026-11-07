@@ -108,13 +108,40 @@ export default async function proxy(req: NextRequest) {
     return handleArtistRoute(req);
   }
 
-  const isLoginPage = pathname === "/admin/login";
+  const isLoginPage = pathname === "/admin/login" || pathname === "/admin/reset-password";
 
-  const isSecure = req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
-  const token =
-    (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: isSecure })) ??
-    (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: false }));
-  const isSignedIn = Boolean(token);
+  let isSignedIn = false;
+
+  // 1. Check direct admin session token (fast & reliable)
+  const rawAdminToken =
+    req.cookies.get("__Secure-admin-session-token")?.value ??
+    req.cookies.get("admin-session-token")?.value;
+
+  if (rawAdminToken) {
+    try {
+      const payload = await decode({
+        token: rawAdminToken,
+        secret: process.env.AUTH_SECRET ?? "",
+        salt: "admin-session-token",
+      });
+      isSignedIn = Boolean(payload?.sub);
+    } catch {
+      isSignedIn = false;
+    }
+  }
+
+  // 2. Fallback to NextAuth getToken
+  if (!isSignedIn) {
+    try {
+      const isSecure = req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+      const token =
+        (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: isSecure })) ??
+        (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: false }));
+      isSignedIn = Boolean(token);
+    } catch {
+      isSignedIn = false;
+    }
+  }
 
   if (isLoginPage) {
     if (isSignedIn) {

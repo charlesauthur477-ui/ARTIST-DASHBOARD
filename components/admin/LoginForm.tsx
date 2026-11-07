@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { loginAction, type LoginActionState } from "@/app/admin/login/actions";
 import { Input, Label, FieldError } from "@/components/admin/ui/FormField";
 import { SubmitButton } from "@/components/admin/ui/SubmitButton";
@@ -20,7 +21,17 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       </div>
 
       <div>
-        <Label htmlFor="password">Password</Label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label htmlFor="password" className="text-sm font-medium text-[var(--admin-text)]">
+            Password
+          </label>
+          <Link
+            href="/admin/reset-password"
+            className="text-xs font-medium text-[var(--admin-primary)] hover:underline"
+          >
+            Forgot / Reset password?
+          </Link>
+        </div>
         <Input id="password" name="password" type="password" autoComplete="current-password" required />
       </div>
 
@@ -32,3 +43,4 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
     </form>
   );
 }
+
