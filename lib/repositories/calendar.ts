@@ -36,6 +36,51 @@ export async function listCalendarEventsForArtist(artistId: string) {
   return rows.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 }
 
+export interface MasterCalendarEventRow {
+  id: string;
+  artistId: string;
+  type: CalendarEventType;
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  venue: string;
+  city: string;
+  country: string;
+  eventType: string;
+  notes: string;
+  bookingId: string | null;
+  artistName: string;
+  artistStageName: string;
+  artistSlug: string;
+}
+
+export async function listAllCalendarEvents(): Promise<MasterCalendarEventRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.artistCalendarEvents.id,
+      artistId: schema.artistCalendarEvents.artistId,
+      type: schema.artistCalendarEvents.type,
+      title: schema.artistCalendarEvents.title,
+      startAt: schema.artistCalendarEvents.startAt,
+      endAt: schema.artistCalendarEvents.endAt,
+      venue: schema.artistCalendarEvents.venue,
+      city: schema.artistCalendarEvents.city,
+      country: schema.artistCalendarEvents.country,
+      eventType: schema.artistCalendarEvents.eventType,
+      notes: schema.artistCalendarEvents.notes,
+      bookingId: schema.artistCalendarEvents.bookingId,
+      artistName: schema.artists.name,
+      artistStageName: schema.artists.stageName,
+      artistSlug: schema.artists.slug,
+    })
+    .from(schema.artistCalendarEvents)
+    .innerJoin(schema.artists, eq(schema.artistCalendarEvents.artistId, schema.artists.id));
+
+  return rows.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+}
+
+
 export async function createCalendarEvent(artistId: string, input: CalendarEventInput) {
   const db = getDb();
   const [row] = await db

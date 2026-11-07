@@ -84,12 +84,23 @@ export default async function PressPage({ params }: PageProps<"/artists/[slug]/p
           </div>
         ) : null}
 
-        <div className="mt-16 rounded-lg border border-dashed border-border-subtle p-6 sm:p-8">
-          <h3 className="text-xs font-medium tracking-[0.2em] text-muted uppercase">Coming Soon</h3>
-          <p className="mt-3 text-sm leading-relaxed text-muted">
-            Technical rider, hospitality rider, stage plot, and input list are being prepared for this artist and
-            will be added to the press kit in a future update.
-          </p>
+        <div className="mt-16 rounded-xl border border-border-subtle bg-surface/50 p-6 sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <SectionHeading eyebrow="Production" title="Technical Rider & Stage Plot" />
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
+                Official live performance specifications, sound reinforcement requirements, 10-channel input patch list, and visual stage plot schematic for venue audio engineers and event producers.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button href={`/artists/${artist.slug}/press/tech-rider`} external icon={<Download className="h-4 w-4" />}>
+                Technical Rider (PDF)
+              </Button>
+              <Button href={`/artists/${artist.slug}/press/stage-plot`} external variant="secondary" icon={<Download className="h-4 w-4" />}>
+                Stage Plot (PDF)
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-16">

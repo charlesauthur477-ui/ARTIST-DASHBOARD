@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { clsx } from "clsx";
-import { Menu, X, LayoutDashboard, Inbox, Users, ImageIcon, Activity, LogOut, CalendarCheck, ShieldCheck, Contact2 } from "lucide-react";
+import { Menu, X, LayoutDashboard, Inbox, Users, ImageIcon, Activity, LogOut, CalendarCheck, Calendar, ShieldCheck, Contact2 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/permissions";
 import { roleLabel } from "@/lib/admin/permissions";
 import { logoutAction } from "@/app/admin/actions";
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/admin/applications", label: "Applications", icon: Inbox },
   { href: "/admin/artists", label: "Artists", icon: Users },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
+  { href: "/admin/calendar", label: "Calendar", icon: Calendar },
   { href: "/admin/clients", label: "Clients", icon: Contact2 },
   { href: "/admin/media", label: "Media", icon: ImageIcon },
   { href: "/admin/activity", label: "Activity", icon: Activity },
