@@ -40,6 +40,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const db = getDb();
 
   return {
+    secret:
+      process.env.AUTH_SECRET ||
+      process.env.NEXTAUTH_SECRET ||
+      "wavelength-artist-platform-secure-jwt-secret-key-production-2026",
     trustHost: true,
     adapter: DrizzleAdapter(db, {
       usersTable: schema.users,

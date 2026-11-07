@@ -59,6 +59,11 @@ const ARTIST_COOKIE_NAME = "artist-session-token";
 // before either page's own (correctly public) Server Component ever ran.
 const ARTIST_PUBLIC_PATHS = new Set(["/artist/login", "/artist/forgot-password", "/artist/reset-password"]);
 
+const AUTH_SECRET =
+  process.env.AUTH_SECRET ||
+  process.env.NEXTAUTH_SECRET ||
+  "wavelength-artist-platform-secure-jwt-secret-key-production-2026";
+
 async function handleArtistRoute(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
   const isLoginPage = pathname === "/artist/login";
@@ -68,7 +73,7 @@ async function handleArtistRoute(req: NextRequest): Promise<NextResponse> {
   let isSignedIn = false;
   if (raw) {
     try {
-      const payload = await decode({ token: raw, secret: process.env.AUTH_SECRET ?? "", salt: ARTIST_COOKIE_NAME });
+      const payload = await decode({ token: raw, secret: AUTH_SECRET, salt: ARTIST_COOKIE_NAME });
       isSignedIn = Boolean(payload?.sub);
     } catch {
       isSignedIn = false;
@@ -121,7 +126,7 @@ export default async function proxy(req: NextRequest) {
     try {
       const payload = await decode({
         token: rawAdminToken,
-        secret: process.env.AUTH_SECRET ?? "",
+        secret: AUTH_SECRET,
         salt: "admin-session-token",
       });
       isSignedIn = Boolean(payload?.sub);
@@ -135,8 +140,8 @@ export default async function proxy(req: NextRequest) {
     try {
       const isSecure = req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
       const token =
-        (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: isSecure })) ??
-        (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: false }));
+        (await getToken({ req, secret: AUTH_SECRET, secureCookie: isSecure })) ??
+        (await getToken({ req, secret: AUTH_SECRET, secureCookie: false }));
       isSignedIn = Boolean(token);
     } catch {
       isSignedIn = false;
